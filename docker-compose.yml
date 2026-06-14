@@ -1,0 +1,78 @@
+# Site-Selection App — docker compose skeleton (GEO-1)
+#
+# Four services share one read-only data artifact via the named volume `data:`.
+#   - ingest   : one-shot offline pipeline (Service A). Writes data: (rw).
+#   - api      : FastAPI scoring engine + agent. Reads data: (ro).
+#   - web      : nginx — serves the SPA, proxies /api, serves *.pmtiles. Reads data: (ro).
+#   - frontend : build-only. Compiles the SPA into web_dist:.
+#
+# `ingest` and `frontend` use compose profiles so they do NOT start on `up`; run them
+# explicitly as one-shot jobs (FR-A5: ingest never runs on the request path):
+#   docker compose run --rm ingest
+#   docker compose run --rm frontend
+#
+# Hardening (healthchecks, mem/cpu limits, restart policy) is GEO-35; nginx + proxy is
+# GEO-34; production Dockerfiles are GEO-33. The :ro mounts below encode the core
+# read-only-artifact contract (§1) and are intentional here.
+
+name: geo-energy
+
+services:
+  ingest:
+    build:
+      context: ./ingest
+    image: geo-energy/ingest
+    profiles: ["ingest"]          # one-shot only — `docker compose run --rm ingest`
+    env_file:
+      - path: .env                # optional: falls back to environment: defaults if absent
+        required: false
+    environment:
+      DATA_DIR: /data
+    volumes:
+      - data:/data                # read-write: writes the artifact into /data/current
+
+  api:
+    build:
+      context: ./api
+    image: geo-energy/api
+    env_file:
+      - path: .env                # optional: falls back to environment: defaults if absent
+        required: false
+    environment:
+      DATA_DIR: /data
+    volumes:
+      - data:/data:ro             # read-only artifact (GEO-15 opens DuckDB read_only=True)
+    expose:
+      - "8000"                    # internal; web proxies to it. Uncomment ports for direct dev:
+    # ports:
+    #   - "8000:8000"
+    # depends_on / healthcheck / limits → GEO-35
+
+  frontend:
+    build:
+      context: ./frontend
+      # Build-time Vite env injection (API base URL, Mapbox token) → GEO-33:
+      # args:
+      #   VITE_API_BASE_URL: /api
+      #   VITE_MAPBOX_TOKEN: ${MAPBOX_TOKEN}
+    image: geo-energy/frontend
+    profiles: ["build"]           # build-only — `docker compose run --rm frontend`
+    volumes:
+      - web_dist:/out             # emits the compiled SPA (dist/) for web to serve
+
+  web:
+    build:
+      context: ./web
+    image: geo-energy/web
+    ports:
+      - "8080:80"
+    volumes:
+      - web_dist:/usr/share/nginx/html:ro   # SPA built by `frontend`
+      - data:/data:ro                       # serve *.pmtiles via byte-range (GEO-34)
+    depends_on:
+      - api
+    # restart: unless-stopped / healthcheck / limits → GEO-35
+
+volumes:
+  data:                           # the read-only artifact (ingest rw; api/web ro)
+  web_dist:                       # compiled SPA (frontend → web)

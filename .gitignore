@@ -1,0 +1,48 @@
+# ── Secrets (never commit) ────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ── Data artifacts (built by `make ingest`, never tracked) ─────────────────────
+/data/
+data/
+*.duckdb
+*.duckdb.wal
+*.pmtiles
+*.mbtiles
+*.tif
+*.tiff
+*.parquet
+*.geoparquet
+# but keep tiny fixtures used by tests
+!ingest/tests/**/*.parquet
+!ingest/tests/**/*.geoparquet
+
+# ── Python ─────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env-venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# ── Node / frontend ──────────────────────────────────────────────────────────
+node_modules/
+frontend/dist/
+frontend/.vite/
+*.log
+npm-debug.log*
+
+# ── OS / editor cruft ──────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/

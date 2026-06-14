@@ -1,0 +1,9 @@
+# Ingestion pipeline dependencies (GEO-2). DuckDB is pinned (spatial extension ABI);
+# fuller pinning/lockfile is GEO-33.
+duckdb==1.1.3
+pyarrow>=17,<19
+pyproj>=3.6,<4
+httpx>=0.27,<0.29
+
+# Dev/test (kept in-image so `make test` can run pytest inside the container).
+pytest>=8,<9

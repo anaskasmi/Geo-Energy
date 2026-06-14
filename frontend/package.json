@@ -1,0 +1,10 @@
+{
+  "name": "geo-energy-frontend",
+  "version": "0.0.0",
+  "private": true,
+  "description": "PLACEHOLDER (GEO-1). Real React + Vite + MapLibre SPA is scaffolded in GEO-22.",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build-placeholder.mjs"
+  }
+}

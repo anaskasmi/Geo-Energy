@@ -1,0 +1,10 @@
+[project]
+name = "geo-ingest"
+version = "0.1.0"
+description = "Offline ingestion pipeline (Service A) for the Kern County site-selection app."
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-q"

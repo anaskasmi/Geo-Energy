@@ -1,0 +1,3 @@
+# PLACEHOLDER (GEO-1). Real, pinned dependency set lands with the FastAPI skeleton (GEO-15).
+fastapi
+uvicorn[standard]
