@@ -85,11 +85,10 @@ def test_forced_apn_field_absent_raises(ctx_factory, monkeypatch):
 
 
 def test_no_source_configured_raises(ctx_factory, monkeypatch):
-    for var in (
-        config.PARCELS_SOURCE_ENV,
-        config.PARCELS_GEODAT_URL_ENV,
-        config.PARCELS_SHAFTER_URL_ENV,
-    ):
-        monkeypatch.delenv(var, raising=False)
+    # No local override, and both endpoint URLs explicitly blanked (empty env beats the
+    # now-confirmed config default) -> nothing to fetch -> SourceError, never a live call.
+    monkeypatch.delenv(config.PARCELS_SOURCE_ENV, raising=False)
+    monkeypatch.setenv(config.PARCELS_GEODAT_URL_ENV, "")
+    monkeypatch.setenv(config.PARCELS_SHAFTER_URL_ENV, "")
     with pytest.raises(SourceError):
         ParcelsFetcher().fetch(ctx_factory())

@@ -4,11 +4,11 @@ Produces the `parcels` table in storage CRS 4326 with a normalized APN join key 
 acreage computed from geometry in a metric CRS (UTM 11N / 26911). Also emits a GeoParquet
 intermediate (4326 + bbox struct) and a GeoJSON for tippecanoe (GEO-14). Spec §2.
 
-Source: GEODAT "Assessor Parcels Land 2025" (ArcGIS FeatureServer) primary, Shafter mirror
-fallback — both paginated to GeoJSON (see arcgis.py). The exact endpoint and attribute
-field names are [CONFIRM]; the endpoints are env-configurable and the APN field is resolved
-from a candidate list. A pre-staged local file (GeoJSON, 4326) can be supplied via
-`GEO_PARCELS_SOURCE` for offline/air-gapped runs and tests.
+Source: GEODAT "Assessor Parcels Land 2025" (ArcGIS FeatureServer, confirmed public /
+token-free 2026-06-15), with an optional Shafter mirror fallback — both paginated to
+GeoJSON (see arcgis.py). The endpoints stay env-configurable and the APN field is resolved
+from a candidate list (the service uses "APN"). A pre-staged local file (GeoJSON, 4326) can
+be supplied via `GEO_PARCELS_SOURCE` for offline/air-gapped runs and tests.
 """
 
 from __future__ import annotations

@@ -4,11 +4,23 @@ from pathlib import Path
 
 import pytest
 
+from pipeline import config
 from pipeline.config import Settings
 from pipeline.fetchers.base import FetchContext
 from pipeline.logging_setup import get_logger
 
 FIXTURES = Path(__file__).parent / "fixtures"
+
+
+@pytest.fixture(autouse=True)
+def _hermetic_sources(monkeypatch):
+    """Keep the suite offline. The live fetcher endpoints now have real defaults, so blank
+    them for every test: a test that forgets to stage a *_SOURCE fixture then fails with a
+    SourceError instead of making a network call. Tests set their own source explicitly.
+    """
+    monkeypatch.setenv(config.PARCELS_GEODAT_URL_ENV, "")
+    monkeypatch.setenv(config.PARCELS_SHAFTER_URL_ENV, "")
+    monkeypatch.setenv(config.COUNTY_URL_ENV, "")
 
 
 def make_settings(tmp_path, keep=3):

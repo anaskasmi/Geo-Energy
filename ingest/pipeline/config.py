@@ -45,18 +45,24 @@ COUNTY_URL_ENV = "GEO_COUNTY_URL"             # override the download URL
 COUNTY_SOURCE_ENV = "GEO_COUNTY_SOURCE"       # pre-staged local file (assumed 4326)
 COUNTY_SOURCE_CRS_ENV = "GEO_COUNTY_SOURCE_CRS"
 
-# Parcels — GEODAT "Assessor Parcels Land 2025" primary, Shafter mirror fallback (both
-# ArcGIS FeatureServers). [CONFIRM] the exact endpoints/fields; set via env until then.
+# Parcels — GEODAT "Assessor Parcels Land 2025" primary, optional Shafter mirror fallback.
 PARCELS_GEODAT_ITEM = "31379b8b48ae455ea5972ce02a54cbb8"  # GEODAT item id (for ops reference)
-PARCELS_GEODAT_URL = ""   # [CONFIRM] FeatureServer/<layer> URL; set GEO_PARCELS_GEODAT_URL
-PARCELS_SHAFTER_URL = ""  # [CONFIRM] Shafter mirror URL; set GEO_PARCELS_SHAFTER_URL
+# Confirmed 2026-06-15: KernGIS hosted Feature Service, access=public (token-free), 421,684
+# polygon features, maxRecordCount=2000, supportsPagination, serves f=geojson in EPSG:4326.
+# APN attribute is "APN" (also "APN9" = 9-digit no-dash, "APN_LABEL"); we still compute
+# acreage from geometry per spec rather than trusting the service's SHAPE_ACRE.
+PARCELS_GEODAT_URL = (
+    "https://services5.arcgis.com/Y8jwjGUWbRjuqpG5/arcgis/rest/services/"
+    "Assessor_Parcels_Land_2025/FeatureServer/0"
+)
+PARCELS_SHAFTER_URL = ""  # optional Shafter mirror fallback; set GEO_PARCELS_SHAFTER_URL if needed
 PARCELS_GEODAT_URL_ENV = "GEO_PARCELS_GEODAT_URL"
 PARCELS_SHAFTER_URL_ENV = "GEO_PARCELS_SHAFTER_URL"
 PARCELS_SOURCE_ENV = "GEO_PARCELS_SOURCE"        # pre-staged local file (GeoJSON, 4326)
 PARCELS_SOURCE_CRS_ENV = "GEO_PARCELS_SOURCE_CRS"
 PARCELS_APN_FIELD_ENV = "GEO_PARCELS_APN_FIELD"  # force the APN attribute name
-# Candidate APN attribute names, tried case-insensitively in order ([CONFIRM] at endpoint).
-PARCELS_APN_FIELDS = ("APN", "ParcelID", "PARCEL_ID", "PARCELID", "APN_LABEL", "APN_D", "AIN")
+# Candidate APN attribute names, tried case-insensitively in order (GEODAT uses "APN").
+PARCELS_APN_FIELDS = ("APN", "APN9", "ParcelID", "PARCEL_ID", "PARCELID", "APN_LABEL", "AIN")
 
 
 @dataclass(frozen=True)
