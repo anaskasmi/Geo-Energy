@@ -16,16 +16,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from . import config
-
-
-def _sql_str(value: object) -> str:
-    """Escape a value for a single-quoted SQL string literal (handles apostrophes)."""
-    return "'" + str(value).replace("'", "''") + "'"
-
-
-def _ident(name: str) -> str:
-    """Quote a SQL identifier (handles embedded double-quotes)."""
-    return '"' + str(name).replace('"', '""') + '"'
+from .sqlutil import ident as _ident
+from .sqlutil import sql_str as _sql_str
 
 
 def bbox_struct_sql(geom_expr: str) -> str:

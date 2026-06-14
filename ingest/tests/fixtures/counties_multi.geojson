@@ -1,0 +1,21 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "GEOID": "06029", "STATEFP": "06", "COUNTYFP": "029", "NAME": "Kern" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[-120.0, 34.9], [-118.0, 34.9], [-118.0, 35.6], [-120.0, 35.6], [-120.0, 34.9]]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "GEOID": "06037", "STATEFP": "06", "COUNTYFP": "037", "NAME": "Los Angeles" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[-118.6, 33.7], [-117.6, 33.7], [-117.6, 34.3], [-118.6, 34.3], [-118.6, 33.7]]]
+      }
+    }
+  ]
+}

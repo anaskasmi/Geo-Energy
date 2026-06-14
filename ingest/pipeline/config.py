@@ -23,6 +23,41 @@ MANIFEST_NAME = "manifest.json"
 RELEASES_SUBDIR = "releases"
 CURRENT_SUBDIR = "current"
 
+# ── Study area: Kern County, CA (fixed project scope) ──────────────────────────
+KERN_STATE_FIPS = "06"      # California
+KERN_COUNTY_FIPS = "029"    # Kern
+KERN_GEOID = "06029"        # STATEFP + COUNTYFP
+
+# Exact survey acre: 1 acre = 4046.8564224 m² (international acre).
+SQ_METERS_PER_ACRE = 4046.8564224
+
+# ── Layer sources (GEO-3 county boundary, GEO-4 parcels) ───────────────────────
+# Network is used only during ingest, never on the request path (FR-A5). Any source can
+# be fed a pre-staged local file via its *_SOURCE env var (offline/air-gapped runs and
+# tests); otherwise it is downloaded from the URLs below (also env-overridable).
+
+# County boundary — the Census cartographic boundary file that pygris wraps. We fetch it
+# directly (DuckDB ST_Read via GDAL) to keep the image slim (no geopandas/pygris stack).
+COUNTY_CB_URL = "https://www2.census.gov/geo/tiger/GENZ2023/shp/cb_2023_us_county_500k.zip"
+COUNTY_CB_SHP = "cb_2023_us_county_500k.shp"  # member to read inside the zip (/vsizip/)
+COUNTY_CB_CRS = 4269                          # Census ships NAD83; we reproject to 4326
+COUNTY_URL_ENV = "GEO_COUNTY_URL"             # override the download URL
+COUNTY_SOURCE_ENV = "GEO_COUNTY_SOURCE"       # pre-staged local file (assumed 4326)
+COUNTY_SOURCE_CRS_ENV = "GEO_COUNTY_SOURCE_CRS"
+
+# Parcels — GEODAT "Assessor Parcels Land 2025" primary, Shafter mirror fallback (both
+# ArcGIS FeatureServers). [CONFIRM] the exact endpoints/fields; set via env until then.
+PARCELS_GEODAT_ITEM = "31379b8b48ae455ea5972ce02a54cbb8"  # GEODAT item id (for ops reference)
+PARCELS_GEODAT_URL = ""   # [CONFIRM] FeatureServer/<layer> URL; set GEO_PARCELS_GEODAT_URL
+PARCELS_SHAFTER_URL = ""  # [CONFIRM] Shafter mirror URL; set GEO_PARCELS_SHAFTER_URL
+PARCELS_GEODAT_URL_ENV = "GEO_PARCELS_GEODAT_URL"
+PARCELS_SHAFTER_URL_ENV = "GEO_PARCELS_SHAFTER_URL"
+PARCELS_SOURCE_ENV = "GEO_PARCELS_SOURCE"        # pre-staged local file (GeoJSON, 4326)
+PARCELS_SOURCE_CRS_ENV = "GEO_PARCELS_SOURCE_CRS"
+PARCELS_APN_FIELD_ENV = "GEO_PARCELS_APN_FIELD"  # force the APN attribute name
+# Candidate APN attribute names, tried case-insensitively in order ([CONFIRM] at endpoint).
+PARCELS_APN_FIELDS = ("APN", "ParcelID", "PARCEL_ID", "PARCELID", "APN_LABEL", "APN_D", "AIN")
+
 
 @dataclass(frozen=True)
 class Settings:

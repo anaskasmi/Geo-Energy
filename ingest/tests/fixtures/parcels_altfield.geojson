@@ -1,0 +1,13 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "ParcelID": "AAA-111", "OTHER": "x" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[-118.40, 35.00], [-118.39, 35.00], [-118.39, 35.01], [-118.40, 35.01], [-118.40, 35.00]]]
+      }
+    }
+  ]
+}

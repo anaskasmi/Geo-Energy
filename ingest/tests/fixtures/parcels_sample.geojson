@@ -1,0 +1,37 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "APN": "  123-456-78 " },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[-118.80, 35.30], [-118.79, 35.30], [-118.79, 35.31], [-118.80, 35.31], [-118.80, 35.30]]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "APN": "987 654 32" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[-118.70, 35.20], [-118.69, 35.20], [-118.69, 35.21], [-118.70, 35.21], [-118.70, 35.20]]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "APN": "BOW-TIE-01" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[-118.60, 35.10], [-118.59, 35.11], [-118.59, 35.10], [-118.60, 35.11], [-118.60, 35.10]]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "APN": "" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[-118.50, 35.05], [-118.49, 35.05], [-118.49, 35.06], [-118.50, 35.06], [-118.50, 35.05]]]
+      }
+    }
+  ]
+}

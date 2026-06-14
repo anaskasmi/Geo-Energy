@@ -24,8 +24,11 @@ def make_settings(tmp_path, keep=3):
 
 
 @pytest.fixture(autouse=True)
-def clean_registry():
+def clean_registry(monkeypatch):
     base.clear_registry()
+    # The harness discovers on-disk fetchers via load_all(); these tests exercise harness
+    # mechanics with their own synthetic fetchers, so neutralize auto-discovery here.
+    monkeypatch.setattr(harness.fetchers, "load_all", lambda: None)
     yield
     base.clear_registry()
 

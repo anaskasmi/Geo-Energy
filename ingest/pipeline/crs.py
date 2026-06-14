@@ -39,6 +39,17 @@ def to_storage_sql(geom_expr: str, *, from_crs: int = DEFAULT_METRIC_CRS) -> str
     return transform_sql(geom_expr, to_crs=CRS_STORAGE, from_crs=from_crs)
 
 
+def ensure_storage_sql(geom_expr: str, *, from_crs: int) -> str:
+    """Reproject a source geometry into storage CRS (4326), a no-op when already there.
+
+    Fetchers read sources in whatever CRS they ship (GeoJSON is 4326 by spec; Census
+    shapefiles are NAD83/4269) and must land geometry in 4326 before storing. When the
+    source is already 4326 this returns the expression unchanged so no redundant
+    `ST_Transform` is emitted.
+    """
+    return geom_expr if int(from_crs) == CRS_STORAGE else to_storage_sql(geom_expr, from_crs=from_crs)
+
+
 @lru_cache(maxsize=None)
 def transformer(from_crs: int = CRS_STORAGE, to_crs: int = DEFAULT_METRIC_CRS):
     """A cached pyproj Transformer (always_xy=True) for Python-side reprojection."""
