@@ -276,6 +276,35 @@ async def explain(
     return serialize.explain_response(row, use_case=use_case, weights=weights)
 
 
+# Static map overlay layers served whole as GeoJSON for the SPA's Layers panel. County-scoped and
+# small (hundreds of features each), so served un-tiled — ETag-cached + gzipped by the middleware.
+# The table names are a fixed allowlist (never user input) so the f-string query is injection-safe.
+_OVERLAY_TABLES = {
+    "transmission": "transmission_lines",
+    "substations": "substations",
+    "flood": "flood_sfha",
+}
+
+
+@app.get("/api/layer/{name}")
+async def layer(name: str, cur=Depends(get_cursor)) -> dict:
+    """GeoJSON for a static map overlay layer (transmission / substations / flood).
+
+    404 for an unknown name; an empty FeatureCollection when the table isn't in the current build
+    (so the SPA degrades gracefully rather than erroring before those layers are ingested).
+    """
+    table = _OVERLAY_TABLES.get(name)
+    if table is None:
+        raise HTTPException(status_code=404, detail=f"unknown layer {name!r}")
+    sql = f"SELECT * EXCLUDE (geom), ST_AsGeoJSON(geom) AS geometry_json FROM {table}"
+    try:
+        cols, data = await run_in_threadpool(_fetch, cur, sql, {})
+    except duckdb.Error:
+        return serialize.layer_feature_collection([])  # table absent in this build → empty
+    rows = [dict(zip(cols, r)) for r in data]
+    return serialize.layer_feature_collection(rows)
+
+
 @app.get("/api/context")
 async def context(cur=Depends(get_cursor)) -> dict:
     """CAISO Kern interconnection-queue summary (GEO-17), informational context only.

@@ -47,9 +47,12 @@ const CARTO_ATTRIB =
 const MAPBOX_ATTRIB =
   '&copy; <a href="https://www.mapbox.com/about/maps/">Mapbox</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
 
+// Cool-neutral fallback under the (data-muted) basemap raster. Design system §4.1: drop the
+// warm tan/sepia in light and match Dark Matter's near-black in dark so the basemap reads as
+// neutral data-ink, never tinted.
 const BACKGROUND_COLOR: Record<ResolvedTheme, string> = {
-  light: "#e9e6e1",
-  dark: "#16181d",
+  light: "#f2f2f0",
+  dark: "#0e0e0e",
 };
 
 interface RasterSource {
@@ -62,19 +65,21 @@ interface RasterSource {
 }
 
 function lightDarkSource(theme: ResolvedTheme): RasterSource {
+  // CARTO Positron / Dark Matter (and Mapbox Light/Dark) are already data-muted, so render them
+  // crisp at full opacity (§4.1) — the previous 0.9 double-faded an already-faded basemap.
   if (HAS_MAPBOX_TOKEN) {
     const styleId = theme === "dark" ? "dark-v11" : "light-v11";
     return {
       tiles: `https://api.mapbox.com/styles/v1/mapbox/${styleId}/tiles/256/{z}/{x}/{y}?access_token=${MAPBOX_TOKEN}`,
       attribution: MAPBOX_ATTRIB,
-      opacity: 0.9,
+      opacity: 1,
       background: BACKGROUND_COLOR[theme],
     };
   }
   return {
     tiles: CARTO_TILES[theme],
     attribution: CARTO_ATTRIB,
-    opacity: 0.9,
+    opacity: 1,
     background: BACKGROUND_COLOR[theme],
   };
 }
@@ -82,7 +87,7 @@ function lightDarkSource(theme: ResolvedTheme): RasterSource {
 function resolveSource(basemap: ConcreteBasemap, theme: ResolvedTheme): RasterSource {
   switch (basemap) {
     case "streets":
-      return { tiles: ESRI_STREETS, attribution: ESRI_ATTRIB, opacity: 0.92, background: BACKGROUND_COLOR[theme] };
+      return { tiles: ESRI_STREETS, attribution: ESRI_ATTRIB, opacity: 0.9, background: BACKGROUND_COLOR[theme] };
     case "satellite":
       return { tiles: ESRI_IMAGERY, attribution: ESRI_ATTRIB, opacity: 0.96, background: "#0b0d10" };
     case "light":

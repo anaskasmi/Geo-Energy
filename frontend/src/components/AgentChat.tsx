@@ -50,7 +50,7 @@ export function AgentChat() {
           <div key={m.id} className={`chat-msg chat-msg--${m.role}`}>
             <p className="chat-msg__text">
               {m.text}
-              {m.streaming && <span className="chat-cursor" aria-hidden="true">▋</span>}
+              {m.streaming && <span className="chat-cursor" aria-hidden="true" />}
             </p>
             {m.refs && m.refs.length > 0 && (
               <div className="chat-refs">

@@ -8,9 +8,10 @@
   width: 100%;
 }
 
+/* Map-first 2-pane: map (1fr) | resize handle | results. Columns are set inline (resizable). */
 .shell--desktop {
   display: grid;
-  grid-template-columns: 320px minmax(0, 1fr) 360px;
+  grid-template-columns: minmax(0, 1fr) 6px 360px;
   grid-template-rows: 100%;
 }
 
@@ -24,15 +25,9 @@
   min-width: 0;
 }
 
-.pane--left,
 .pane--right {
   background: var(--bg-elevated);
   overflow-y: auto;
-}
-.pane--left {
-  border-right: 1px solid var(--border);
-}
-.pane--right {
   border-left: 1px solid var(--border);
 }
 
@@ -47,16 +42,24 @@
 
 /* ── Panel sections (shared by sidebar + results) ─────────────────────────────── */
 .panel-section {
-  padding: 16px;
+  padding: var(--space-4);
   border-bottom: 1px solid var(--border);
 }
 .panel-section__title {
-  font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1_5);
+  font-size: 0.6875rem; /* 11px eyebrow */
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--text-faint);
-  margin-bottom: 10px;
+  margin-bottom: var(--space-2_5);
+}
+/* The header eyebrow icons sit a touch above the text baseline; nudge for optical centering. */
+.panel-section__title svg {
+  flex: 0 0 auto;
+  color: var(--text-muted);
 }
 
 .placeholder-text {
@@ -66,46 +69,38 @@
 
 /* ── Sidebar ──────────────────────────────────────────────────────────────────── */
 .sidebar__header {
-  padding: 16px;
+  padding: var(--space-4);
   border-bottom: 1px solid var(--border);
 }
 .sidebar__title {
-  font-size: 18px;
+  font-size: 1.25rem; /* 20px product title */
   font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
 }
 .sidebar__subtitle {
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: 0.8125rem;
+  margin-top: 2px;
 }
 
 /* ── Theme toggle ─────────────────────────────────────────────────────────────── */
+/* Compact light/dark toggle — a single icon button that lives in the top bar's right cluster. */
 .theme-toggle {
   display: inline-flex;
-  gap: 2px;
-  padding: 2px;
-  background: var(--bg-sunken);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-}
-.theme-toggle__btn {
-  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
+  justify-content: center;
+  width: var(--ctl-h-md);
+  height: var(--ctl-h-md);
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-muted);
-  font-size: 12px;
-  font-weight: 500;
+  transition: background var(--dur-fast) var(--ease-standard), color var(--dur-fast) var(--ease-standard);
 }
-.theme-toggle__btn[aria-pressed="true"] {
-  background: var(--surface);
+.theme-toggle:hover {
+  background: var(--bg-sunken);
   color: var(--text);
-  box-shadow: var(--shadow);
-}
-.theme-toggle__label {
-  font-size: 12px;
 }
 
 /* ── Results panel ────────────────────────────────────────────────────────────── */
@@ -140,18 +135,108 @@
   width: 55%;
 }
 
-/* ── Floating toolbar (mobile) ────────────────────────────────────────────────── */
-.floating-toolbar {
+/* ── Full-width top bar (draw tools + control buttons, floats over the map) ─────── */
+.topbar {
   position: absolute;
-  top: calc(12px + env(safe-area-inset-top, 0px));
-  left: 12px;
-  z-index: 5;
-  padding: 4px;
-  /* GEO-28: near-solid backing so control text keeps WCAG AA contrast over any basemap. */
+  top: calc(var(--space-2) + env(safe-area-inset-top, 0px));
+  left: calc(var(--space-2) + env(safe-area-inset-left, 0px));
+  right: calc(var(--space-2) + env(safe-area-inset-right, 0px));
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  padding: var(--space-1);
+  /* GEO-28: near-solid backing so control text/icons keep WCAG AA contrast over any basemap. */
   background: color-mix(in srgb, var(--surface) 97%, transparent);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  box-shadow: var(--shadow);
+  border-radius: var(--radius-md);
+  /* ring + shadow come from the .overlay-panel class */
+}
+
+/* Right cluster of single-purpose control buttons + the popovers they open. */
+.map-controls {
+  position: relative;
+  margin-left: auto; /* push to the right edge of the bar */
+}
+.map-controls__buttons {
+  display: flex;
+  align-items: center;
+  gap: var(--space-0_5);
+}
+.map-control-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--ctl-h-md);
+  height: var(--ctl-h-md);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  transition: background var(--dur-fast) var(--ease-standard), color var(--dur-fast) var(--ease-standard);
+}
+.map-control-btn:hover {
+  background: var(--bg-sunken);
+  color: var(--text);
+}
+.map-control-btn[aria-expanded="true"] {
+  background: var(--accent-subtle);
+  color: var(--accent-text);
+}
+
+/* Minimal popover for one control's concern — drops below the bar, right-aligned, scrolls. */
+.map-panel {
+  position: absolute;
+  top: calc(100% + var(--space-2));
+  right: 0;
+  z-index: 7;
+  width: min(360px, calc(100vw - 2 * var(--gutter)));
+  max-height: min(72vh, calc(100dvh - 130px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-4);
+  background: var(--surface-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  /* ring + shadow come from the .overlay-panel class */
+}
+.map-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+}
+.map-panel__title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1_5);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text);
+}
+.map-panel__title svg {
+  color: var(--text-muted);
+}
+.map-panel__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+}
+.map-panel__close:hover {
+  background: var(--bg-sunken);
+  color: var(--text);
+}
+.map-panel__stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
 }
 
 /* ── Bottom sheet (mobile) ────────────────────────────────────────────────────── */
@@ -165,10 +250,11 @@
   flex-direction: column;
   background: var(--bg-elevated);
   border-top: 1px solid var(--border);
-  border-radius: 16px 16px 0 0;
-  box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.18);
-  transition: height 220ms cubic-bezier(0.22, 1, 0.36, 1);
-  touch-action: none;
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  box-shadow: var(--ring-hairline), var(--shadow-lg);
+  transition: height var(--dur-slower) var(--ease-decelerate);
+  /* P0 (design system §6): touch-action lives on the HANDLE only — leaving it on the whole
+   * sheet silently kills list scrolling. The content sets its own pan-y below. */
 }
 .bottom-sheet[data-dragging] {
   transition: none;
@@ -177,9 +263,13 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 28px;
+  width: 100%;
+  height: 32px;
   flex: 0 0 auto;
+  border: 0;
+  background: transparent;
   cursor: grab;
+  /* Only the handle owns the gesture; the content scrolls (set in .bottom-sheet__content). */
   touch-action: none;
 }
 .bottom-sheet__handle:active {
@@ -188,13 +278,21 @@
 .bottom-sheet__grip {
   width: 40px;
   height: 4px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--border-strong);
+  transition: background var(--dur-fast) var(--ease-standard);
+}
+.bottom-sheet__handle:hover .bottom-sheet__grip {
+  background: var(--text-faint);
 }
 .bottom-sheet__content {
   flex: 1 1 auto;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  /* P0 (§6): own the vertical pan so the list scrolls; contain it so an over-scroll doesn't
+   * bubble to the map/page behind the sheet. */
+  touch-action: pan-y;
+  overscroll-behavior: contain;
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
@@ -206,23 +304,27 @@
   padding: 2px;
   background: var(--bg-sunken);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
 }
 .segmented__btn {
   flex: 1 1 auto;
-  padding: 5px 8px;
+  padding: var(--space-1_5) var(--space-2);
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 500;
   white-space: nowrap;
+  transition: background var(--dur-fast) var(--ease-standard), color var(--dur-fast) var(--ease-standard);
+}
+.segmented__btn:hover:not([aria-pressed="true"]):not([aria-checked="true"]) {
+  color: var(--text);
 }
 .segmented__btn[aria-pressed="true"] {
   background: var(--surface);
   color: var(--text);
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-sm);
 }
 
 /* ── Layer control ────────────────────────────────────────────────────────────── */
@@ -325,37 +427,29 @@
   color: var(--text-faint);
 }
 
-/* ── Drawing toolbar (floats over the map) ────────────────────────────────────── */
-.draw-toolbar {
-  position: absolute;
-  top: calc(12px + env(safe-area-inset-top, 0px));
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 6;
+/* ── Drawing tools (left cluster of the full-width top bar) ────────────────────── */
+.draw-tools {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px;
-  max-width: calc(100% - 24px);
+  gap: var(--space-1);
   flex-wrap: wrap;
-  justify-content: center;
-  /* GEO-28: near-solid backing so the toolbar text/icons keep WCAG AA contrast over the map. */
-  background: color-mix(in srgb, var(--surface) 97%, transparent);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  box-shadow: var(--shadow);
 }
 .draw-btn {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 5px 9px;
+  gap: var(--space-1_5);
+  padding: var(--space-1_5) var(--space-2);
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 500;
+  transition: background var(--dur-fast) var(--ease-standard), color var(--dur-fast) var(--ease-standard);
+}
+.draw-btn:hover:not(:disabled) {
+  background: var(--bg-sunken);
+  color: var(--text);
 }
 .draw-btn--icon {
   padding: 5px 8px;
@@ -418,7 +512,6 @@
 
 /* ── Target sizes (GEO-28, WCAG 2.2 SC 2.5.8: min 24x24 CSS px; mobile bumps to 44 in GEO-29) ── */
 .draw-btn,
-.theme-toggle__btn,
 .segmented__btn {
   min-height: 28px;
 }
@@ -445,8 +538,8 @@
   border: 0;
 }
 .error-text {
-  color: #dc2626;
-  font-size: 13px;
+  color: var(--danger-text);
+  font-size: 0.8125rem;
 }
 
 /* ── Scoring control (sidebar) ────────────────────────────────────────────────── */
@@ -454,7 +547,7 @@
 .segmented__btn[aria-checked="true"] {
   background: var(--surface);
   color: var(--text);
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-sm);
 }
 .scoring-control {
   display: flex;
@@ -473,7 +566,7 @@
   color: var(--accent);
 }
 .scoring-control__status[data-status="error"] {
-  color: #dc2626;
+  color: var(--danger-text);
 }
 
 /* ── Results: head, banner, filters, summary ──────────────────────────────────── */
@@ -488,10 +581,10 @@
   margin: 0;
 }
 .results-sort select {
-  font-size: 12px;
-  padding: 4px 6px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  font-size: 0.75rem;
+  padding: var(--space-1) var(--space-1_5);
+  border: 1px solid var(--border-interactive);
+  border-radius: var(--radius-sm);
   background: var(--bg-sunken);
   color: var(--text);
   max-width: 160px;
@@ -546,12 +639,12 @@
 }
 .results-filters input {
   width: 100%;
-  padding: 4px 6px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  padding: var(--space-1) var(--space-1_5);
+  border: 1px solid var(--border-interactive);
+  border-radius: var(--radius-sm);
   background: var(--bg-sunken);
   color: var(--text);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-variant-numeric: tabular-nums;
 }
 
@@ -562,10 +655,11 @@
   justify-content: center;
   min-width: 30px;
   height: 24px;
-  padding: 0 6px;
-  border-radius: 6px;
-  font-size: 12px;
+  padding: 0 var(--space-1_5);
+  border-radius: var(--radius-xs);
+  font-size: 0.75rem;
   font-weight: 700;
+  /* Text color is set inline by scoreTextColor() (WCAG-correct black/white per chip bg). */
   color: rgba(0, 0, 0, 0.82);
   font-variant-numeric: tabular-nums;
   flex: 0 0 auto;
@@ -573,37 +667,44 @@
 .score-chip--lg {
   min-width: 44px;
   height: 40px;
-  font-size: 18px;
-  border-radius: 8px;
+  font-size: 1.25rem;
+  border-radius: var(--radius-sm);
 }
 
 /* ── Results: ranked row ──────────────────────────────────────────────────────── */
 .results-row {
   display: flex;
   align-items: stretch;
-  gap: 6px;
+  gap: var(--space-1_5);
   padding: 0;
   background: var(--bg-sunken);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   overflow: hidden;
+  transition: border-color var(--dur-fast) var(--ease-standard), box-shadow var(--dur-fast) var(--ease-standard);
 }
+/* Selection = a 3px left accent bar (inset shadow, so it never reflows the row content the way a
+ * border-left would). Pairs with the map highlight + the active-row scroll-into-view. */
 .results-row--active {
   border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent);
+  box-shadow: inset 3px 0 0 0 var(--accent);
 }
 .results-row__main {
   flex: 1 1 auto;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px;
+  gap: var(--space-2_5);
+  padding: var(--space-2_5);
   border: 0;
   background: transparent;
   text-align: left;
   color: var(--text);
   cursor: pointer;
   min-width: 0;
+  transition: background var(--dur-fast) var(--ease-standard);
+}
+.results-row__main:hover {
+  background: var(--bg-elevated);
 }
 .results-row__rank {
   font-size: 11px;
@@ -753,11 +854,11 @@
   font-variant-numeric: tabular-nums;
 }
 .exclusion-banner {
-  padding: 8px 10px;
-  border-radius: 8px;
-  background: color-mix(in srgb, #dc2626 12%, transparent);
-  border: 1px solid color-mix(in srgb, #dc2626 40%, transparent);
-  font-size: 12px;
+  padding: var(--space-2) var(--space-2_5);
+  border-radius: var(--radius-md);
+  background: var(--danger-subtle);
+  border: 1px solid var(--danger-border);
+  font-size: 0.75rem;
   color: var(--text);
 }
 .exclusion-list {
@@ -813,12 +914,12 @@
   z-index: 20;
   min-width: 170px;
   margin: 0;
-  padding: 4px;
+  padding: var(--space-1);
   list-style: none;
-  background: var(--surface);
+  background: var(--surface-elevated);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: var(--shadow);
+  border-radius: var(--radius-md);
+  box-shadow: var(--ring-hairline), var(--shadow-lg);
 }
 .map-context-menu button {
   display: block;
@@ -851,11 +952,11 @@
   width: min(420px, 100%);
   max-height: 90vh;
   overflow-y: auto;
-  padding: 16px;
-  background: var(--bg-elevated);
+  padding: var(--space-5);
+  background: var(--surface-elevated);
   border: 1px solid var(--border);
-  border-radius: 12px;
-  box-shadow: var(--shadow);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--ring-hairline), var(--edge-highlight), var(--shadow-xl);
 }
 .modal__head {
   display: flex;
@@ -915,22 +1016,27 @@ kbd {
 /* ── Mobile UX (GEO-29): FAB + finger-sized targets ───────────────────────────── */
 .fab {
   position: absolute;
-  right: calc(16px + env(safe-area-inset-right, 0px));
-  bottom: calc(16px + 14vh + env(safe-area-inset-bottom, 0px)); /* clear the peek-height sheet */
+  right: calc(var(--gutter) + env(safe-area-inset-right, 0px));
+  /* Anchored just above the fixed peek-height sheet + the home-indicator safe area (§6). */
+  bottom: calc(var(--sheet-peek) + var(--space-3) + env(safe-area-inset-bottom, 0px));
   z-index: 15;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  height: 52px;
-  min-width: 52px;
-  padding: 0 20px;
+  gap: var(--space-2);
+  height: var(--fab);
+  min-width: var(--fab);
+  padding: 0 var(--space-5);
   border: 0;
-  border-radius: 26px;
+  border-radius: var(--radius-pill);
   background: var(--accent);
   color: var(--accent-contrast);
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 600;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
+  box-shadow: var(--ring-hairline), var(--shadow-lg);
+  transition: background var(--dur-fast) var(--ease-standard), transform var(--dur-fast) var(--ease-standard);
+}
+.fab:active {
+  transform: translateY(1px);
 }
 .fab[aria-pressed="true"] {
   background: var(--text);
@@ -946,17 +1052,20 @@ kbd {
 @media (pointer: coarse) {
   .draw-btn,
   .segmented__btn,
-  .theme-toggle__btn,
   .results-row__main,
   .map-context-menu button {
     min-height: 44px;
   }
-  .draw-btn--icon {
+  .draw-btn--icon,
+  .map-control-btn,
+  .theme-toggle {
     min-width: 44px;
+    min-height: 44px;
   }
   .context-banner__close,
   .compare__clear,
   .modal__close,
+  .map-panel__close,
   .bottom-sheet__handle {
     min-width: 44px;
     min-height: 44px;
@@ -979,10 +1088,13 @@ kbd {
 .agent-chat__log {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
   max-height: 260px;
   overflow-y: auto;
-  padding: 4px;
+  padding: var(--space-2);
+  background: var(--bg-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
 }
 .chat-msg {
   display: flex;
@@ -1010,12 +1122,19 @@ kbd {
   border-bottom-right-radius: 3px;
 }
 .chat-msg--assistant .chat-msg__text {
-  background: var(--bg-sunken);
+  background: var(--bg-elevated);
   color: var(--text);
+  border: 1px solid var(--border);
   border-bottom-left-radius: 3px;
 }
 .chat-cursor {
-  margin-left: 1px;
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  border-radius: 1px;
+  background: currentColor;
   animation: chat-blink 1s steps(2, start) infinite;
 }
 @keyframes chat-blink {
@@ -1066,21 +1185,28 @@ kbd {
 .chat-input input {
   flex: 1 1 auto;
   min-width: 0;
-  padding: 7px 10px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  padding: var(--space-1_5) var(--space-2_5);
+  border: 1px solid var(--border-interactive);
+  border-radius: var(--radius-sm);
   background: var(--bg-sunken);
   color: var(--text);
-  font-size: 13px;
+  font-size: 0.8125rem;
+}
+.chat-input input::placeholder {
+  color: var(--text-faint);
 }
 .chat-input button {
-  padding: 0 12px;
+  padding: 0 var(--space-3);
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: var(--accent);
   color: var(--accent-contrast);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
+  transition: background var(--dur-fast) var(--ease-standard);
+}
+.chat-input button:hover:not(:disabled) {
+  background: var(--accent-hover);
 }
 .chat-input button:disabled {
   opacity: 0.5;
@@ -1099,24 +1225,34 @@ kbd {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  min-height: 32px;
-  padding: 6px 12px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  gap: var(--space-1_5);
+  min-height: var(--ctl-h-md);
+  padding: var(--space-1_5) var(--space-3);
+  border: 1px solid var(--border-interactive);
+  border-radius: var(--radius-sm);
   background: var(--bg-sunken);
   color: var(--text);
-  font-size: 12px;
+  font-size: 0.8125rem;
   font-weight: 500;
+  transition: background var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard),
+    transform var(--dur-fast) var(--ease-standard);
 }
-.panel-btn:hover:not(:disabled),
-.panel-btn:focus-visible {
+.panel-btn:hover:not(:disabled) {
+  background: var(--bg-elevated);
   border-color: var(--accent);
+}
+.panel-btn:active:not(:disabled) {
+  transform: translateY(1px);
 }
 .panel-btn--primary {
   background: var(--accent);
   color: var(--accent-contrast);
-  border-color: var(--accent);
+  border-color: transparent;
+  font-weight: 600;
+}
+.panel-btn--primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: transparent;
 }
 .panel-btn:disabled {
   opacity: 0.5;
@@ -1143,12 +1279,12 @@ kbd {
 .share-control__save input {
   flex: 1 1 auto;
   min-width: 0;
-  padding: 6px 10px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  padding: var(--space-1_5) var(--space-2_5);
+  border: 1px solid var(--border-interactive);
+  border-radius: var(--radius-sm);
   background: var(--bg-sunken);
   color: var(--text);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 .share-control__note {
   font-size: 11px;
@@ -1211,7 +1347,7 @@ kbd {
 }
 .saved-list__delete:hover,
 .saved-list__delete:focus-visible {
-  color: #dc2626;
+  color: var(--danger-text);
   background: var(--bg-elevated);
 }
 
@@ -1308,13 +1444,13 @@ kbd {
 
 /* ── Specific error card with recovery action (GEO-32 #10) ────────────────────── */
 .error-card {
-  padding: 12px;
-  border-radius: 8px;
-  background: color-mix(in srgb, #dc2626 10%, transparent);
-  border: 1px solid color-mix(in srgb, #dc2626 35%, transparent);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--danger-subtle);
+  border: 1px solid var(--danger-border);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .error-card__title {
   font-size: 13px;
@@ -1341,13 +1477,13 @@ kbd {
   align-items: center;
   gap: 10px;
   max-width: min(440px, calc(100% - 24px));
-  padding: 8px 12px;
-  font-size: 12px;
+  padding: var(--space-2) var(--space-3);
+  font-size: 0.75rem;
   color: var(--text);
   background: color-mix(in srgb, var(--surface) 97%, transparent);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  box-shadow: var(--shadow);
+  border-radius: var(--radius-md);
+  box-shadow: var(--ring-hairline), var(--shadow-lg);
 }
 .map-notice__close {
   flex: 0 0 auto;
@@ -1368,11 +1504,11 @@ kbd {
   transform: translateX(-50%);
   z-index: 90;
   width: min(380px, calc(100% - 32px));
-  padding: 16px;
-  background: var(--bg-elevated);
+  padding: var(--space-4);
+  background: var(--surface-elevated);
   border: 1px solid var(--border);
-  border-radius: 12px;
-  box-shadow: var(--shadow);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--ring-hairline), var(--shadow-xl);
 }
 .coachmark__head {
   display: flex;

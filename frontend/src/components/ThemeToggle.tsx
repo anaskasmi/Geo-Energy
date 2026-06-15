@@ -1,34 +1,28 @@
-import { useTheme } from "../theme/useTheme";
-import type { ThemePreference } from "../theme/theme";
+import { Moon, Sun } from "lucide-react";
 
-const OPTIONS: { value: ThemePreference; label: string; icon: string }[] = [
-  { value: "light", label: "Light", icon: "☀" },
-  { value: "system", label: "System", icon: "◐" },
-  { value: "dark", label: "Dark", icon: "☾" },
-];
+import { useTheme } from "../theme/useTheme";
+import { Icon } from "./Icon";
 
 /**
- * Theme selector: Light / System / Dark. "System" follows the OS preference; Light/Dark
- * are manual overrides. The choice is persisted by the ThemeProvider.
+ * Compact theme toggle: a single icon button that flips light ↔ dark. It shows the CURRENT
+ * theme's glyph (sun in light, moon in dark); the aria-label / title state the action. Tapping
+ * sets an explicit preference (overriding "system"). Floats in the map's top-left corner on both
+ * the desktop and mobile shells, so it stays a small, out-of-the-way control instead of the old
+ * three-segment row that collided with the drawing toolbar.
  */
 export function ThemeToggle() {
-  const { preference, setPreference } = useTheme();
-
+  const { resolvedTheme, setPreference } = useTheme();
+  const isDark = resolvedTheme === "dark";
+  const next = isDark ? "light" : "dark";
   return (
-    <div className="theme-toggle" role="group" aria-label="Color theme">
-      {OPTIONS.map((option) => (
-        <button
-          key={option.value}
-          type="button"
-          className="theme-toggle__btn"
-          aria-pressed={preference === option.value}
-          onClick={() => setPreference(option.value)}
-          title={`${option.label} theme`}
-        >
-          <span aria-hidden="true">{option.icon}</span>
-          <span className="theme-toggle__label">{option.label}</span>
-        </button>
-      ))}
-    </div>
+    <button
+      type="button"
+      className="theme-toggle"
+      aria-label={`Switch to ${next} theme`}
+      title={`Switch to ${next} theme`}
+      onClick={() => setPreference(next)}
+    >
+      <Icon icon={isDark ? Sun : Moon} size={18} />
+    </button>
   );
 }

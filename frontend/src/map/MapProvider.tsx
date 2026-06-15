@@ -11,7 +11,7 @@ import type { LayerStateMap } from "./layers";
 
 /** Provides shared map state (basemap, layer toggles, selection, drawing) to the SPA. */
 export function MapProvider({ children }: { children: ReactNode }) {
-  const [basemap, setBasemap] = useState<BasemapId>("auto");
+  const [basemap, setBasemap] = useState<BasemapId>("satellite");
   const [layers, setLayers] = useState<LayerStateMap>(initialLayerState);
   const [selected, setSelected] = useState<ParcelInfo | null>(null);
   const [drawMode, setDrawMode] = useState<DrawMode>("idle");

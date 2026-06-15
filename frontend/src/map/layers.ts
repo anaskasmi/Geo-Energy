@@ -12,7 +12,15 @@
 
 import type { Map as MapLibreMap } from "maplibre-gl";
 
-import { PARCELS_FILL_LAYER, PARCELS_LINE_LAYER } from "./constants";
+import {
+  FLOOD_FILL_LAYER,
+  FLOOD_LINE_LAYER,
+  PARCELS_FILL_LAYER,
+  PARCELS_LINE_LAYER,
+  SUBSTATIONS_CIRCLE_LAYER,
+  TRANSMISSION_CASING_LAYER,
+  TRANSMISSION_LINE_LAYER,
+} from "./constants";
 
 /** A concrete MapLibre layer controlled by a logical layer, with its opacity paint prop. */
 export interface MapLayerRef {
@@ -38,13 +46,11 @@ export interface LayerDef {
   note?: string;
 }
 
-const SOON = "Appears here once its tiles/scores are produced (GEO-16+/GEO-24+).";
-
 export const LAYERS: LayerDef[] = [
   {
     id: "parcels",
     label: "Parcels",
-    swatch: "#2563eb",
+    swatch: "#3b5bdb",
     symbol: "fill",
     available: true,
     mapLayers: [
@@ -57,40 +63,43 @@ export const LAYERS: LayerDef[] = [
   {
     id: "transmission",
     label: "Transmission lines",
-    swatch: "#f59e0b",
+    swatch: "#f08c00",
     symbol: "line",
-    available: false,
-    mapLayers: [],
+    available: true,
+    mapLayers: [
+      { id: TRANSMISSION_CASING_LAYER, opacityProp: "line-opacity", baseOpacity: 0.35 },
+      { id: TRANSMISSION_LINE_LAYER, opacityProp: "line-opacity", baseOpacity: 0.9 },
+    ],
     defaultVisible: true,
     defaultOpacity: 1,
-    note: SOON,
   },
   {
     id: "substations",
     label: "Substations",
-    swatch: "#ef4444",
+    swatch: "#e8368f",
     symbol: "circle",
-    available: false,
-    mapLayers: [],
+    available: true,
+    mapLayers: [{ id: SUBSTATIONS_CIRCLE_LAYER, opacityProp: "circle-opacity", baseOpacity: 0.95 }],
     defaultVisible: true,
     defaultOpacity: 1,
-    note: SOON,
   },
   {
     id: "sfha",
     label: "Flood (SFHA)",
-    swatch: "#38bdf8",
+    swatch: "#22b8cf",
     symbol: "fill",
-    available: false,
-    mapLayers: [],
+    available: true,
+    mapLayers: [
+      { id: FLOOD_FILL_LAYER, opacityProp: "fill-opacity", baseOpacity: 0.22 },
+      { id: FLOOD_LINE_LAYER, opacityProp: "line-opacity", baseOpacity: 0.8 },
+    ],
     defaultVisible: true,
     defaultOpacity: 1,
-    note: SOON,
   },
   {
     id: "result",
     label: "Suitability score",
-    swatch: "#1a9850",
+    swatch: "#22a884",
     symbol: "ramp",
     // Rendered by the deck.gl overlay (GEO-24), not a native MapLibre layer — so mapLayers is
     // empty and MapView reads this toggle's visibility/opacity to drive the overlay directly.
@@ -113,8 +122,22 @@ export const RESULT_LAYER_ID = "result";
  * scale. Viridis is monotonic in lightness (dark=low → bright=high), so the order survives
  * greyscale printing and every CVD type. Score is never conveyed by colour ALONE — the ranked
  * list, the numeric score chip, and the rank pair with it everywhere.
+ *
+ * Upgraded to 10 stops (design system §4.2) for a smoother sRGB lerp that better preserves
+ * viridis's perceptual uniformity across the 0–100 range.
  */
-export const SCORE_RAMP = ["#440154", "#414487", "#2a788e", "#22a884", "#7ad151", "#fde725"];
+export const SCORE_RAMP = [
+  "#440154",
+  "#482878",
+  "#3e4a89",
+  "#31688e",
+  "#26828e",
+  "#1f9e89",
+  "#35b779",
+  "#6dcd59",
+  "#b4de2c",
+  "#fde725",
+];
 
 function hexToRgb(hex: string): [number, number, number] {
   const n = parseInt(hex.slice(1), 16);

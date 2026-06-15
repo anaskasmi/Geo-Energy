@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
+import { X } from "lucide-react";
+
+import { Icon } from "./Icon";
 
 /**
  * First-run onboarding coachmarks (GEO-32 #7): a dismissible, keyboard-accessible guided
@@ -93,7 +96,7 @@ export function Coachmarks({ open, onClose }: { open: boolean; onClose: () => vo
       <div className="coachmark__head">
         <span className="coachmark__step">{`Step ${step + 1} of ${STEPS.length}`}</span>
         <button type="button" className="coachmark__close" aria-label="Dismiss tour" onClick={close}>
-          ✕
+          <Icon icon={X} size={16} />
         </button>
       </div>
       <h2 className="coachmark__title">{current.title}</h2>

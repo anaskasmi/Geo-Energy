@@ -1,26 +1,80 @@
-/* ── Theme variables ─────────────────────────────────────────────────────────
- * Driven by the `data-theme` attribute on <html> (set by ThemeProvider / the inline
- * pre-paint script in index.html). Light is the default; [data-theme="dark"] overrides.
- */
+/* ════════════════════════════════════════════════════════════════════════════════════════
+ * DESIGN SYSTEM — Foundations (see docs/DESIGN-SYSTEM.md, the single source of truth)
+ *
+ * Tokens are driven by the `data-theme` attribute on <html> (set by ThemeProvider / the inline
+ * pre-paint script in index.html). Light is the default; [data-theme="dark"] overrides only what
+ * changes. Migration is ADDITIVE: the original role names (--bg/--surface/--border/--text/--accent…)
+ * are kept so existing call sites don't churn; new channels (accent sub-tokens, status colors,
+ * spacing/radius/elevation/motion/focus) are layered on top.
+ * ════════════════════════════════════════════════════════════════════════════════════════ */
+
 :root,
 :root[data-theme="light"] {
   color-scheme: light;
 
+  /* ── Surfaces & text ──────────────────────────────────────────────────────── */
   --bg: #f4f5f7;
   --bg-elevated: #ffffff;
   --bg-sunken: #ebedf0;
   --surface: #ffffff;
-  --border: #d9dce1;
+  --surface-elevated: #ffffff; /* popover / menu / modal */
+  --border: #d9dce1; /* decorative dividers */
   --border-strong: #c2c7cf;
+  --border-interactive: #868d99; /* input/control edges, ≥3:1 (WCAG 1.4.11) */
 
   --text: #1b1f24;
   --text-muted: #5b6370;
   --text-faint: #8a929e;
 
-  --accent: #2563eb;
+  /* ── Accent — intentional azure (kept out of the viridis green gamut) ────────── */
+  --accent: #1e5fd9;
+  --accent-hover: #1b4fc0;
   --accent-contrast: #ffffff;
+  --accent-text: #1d56cf; /* inline links / text */
+  --accent-vivid: #2563eb; /* focus ring, active toggle, 3:1 contexts */
+  --accent-subtle: #e7effc; /* tinted chip / selection bg */
+  --accent-border: #b9d2f7;
 
-  --shadow: 0 1px 2px rgba(16, 24, 40, 0.06), 0 4px 12px rgba(16, 24, 40, 0.08);
+  /* ── Status — solid (white label) · vivid (icon/stroke) · text (on tint) · subtle (bg) · border ── */
+  --success: #127c39;
+  --success-vivid: #16a34a;
+  --success-text: #15803d;
+  --success-subtle: #eaf7ee;
+  --success-border: #b6e3c2;
+
+  --warning: #b45309;
+  --warning-vivid: #d97706;
+  --warning-text: #a8550a;
+  --warning-subtle: #fbeccf;
+  --warning-border: #f0cd8f;
+
+  --danger: #dc2626;
+  --danger-vivid: #ef4444;
+  --danger-text: #c01a1a;
+  --danger-subtle: #fdebeb;
+  --danger-border: #f4b9b9;
+
+  --info: #1e5fd9;
+  --info-vivid: #2563eb;
+  --info-text: #1d56cf;
+  --info-subtle: #e7effc;
+  --info-border: #b9d2f7;
+
+  /* "Recommended / best-site" — clean-energy green, badge-only (never chrome). */
+  --positive: #127c39;
+  --positive-subtle: #eaf7ee;
+
+  /* ── Elevation — theme-split (dark needs near-black shadow + luminous hairline) ── */
+  --shadow-xs: 0 1px 2px 0 rgb(16 24 40 / 0.05);
+  --shadow-sm: 0 1px 3px 0 rgb(16 24 40 / 0.1), 0 1px 2px -1px rgb(16 24 40 / 0.1);
+  --shadow-md: 0 4px 8px -2px rgb(16 24 40 / 0.1), 0 2px 4px -2px rgb(16 24 40 / 0.06);
+  --shadow-lg: 0 12px 16px -4px rgb(16 24 40 / 0.1), 0 4px 6px -2px rgb(16 24 40 / 0.05);
+  --shadow-xl: 0 20px 24px -4px rgb(16 24 40 / 0.12), 0 8px 8px -4px rgb(16 24 40 / 0.06);
+  --ring-hairline: inset 0 0 0 1px rgb(16 24 40 / 0.08);
+  --edge-highlight: inset 0 1px 0 0 rgb(255 255 255 / 0.4);
+
+  /* Back-compat aliases (old call sites): map onto the new scale. */
+  --shadow: var(--shadow-md);
   --skeleton: #e3e6ea;
 }
 
@@ -31,18 +85,118 @@
   --bg-elevated: #1a1d23;
   --bg-sunken: #14171c;
   --surface: #1a1d23;
+  --surface-elevated: #222831; /* dark gets *lighter* with elevation (M3 tonal) */
   --border: #2a2f37;
   --border-strong: #3a414b;
+  --border-interactive: #646e78;
 
   --text: #e8eaed;
   --text-muted: #a4adba;
   --text-faint: #6b7480;
 
   --accent: #4f8cff;
+  --accent-hover: #6c9dff;
   --accent-contrast: #0f1115;
+  --accent-text: #7aa9ff;
+  --accent-vivid: #4f8cff;
+  --accent-subtle: #10213f;
+  --accent-border: #274a78;
 
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 6px 16px rgba(0, 0, 0, 0.45);
+  --success: #22c55e;
+  --success-vivid: #4ade80;
+  --success-text: #4ade80;
+  --success-subtle: #10271a;
+  --success-border: #1f3a28;
+
+  --warning: #f59e0b;
+  --warning-vivid: #fbbf24;
+  --warning-text: #fbbf24;
+  --warning-subtle: #2a1e08;
+  --warning-border: #4a3613;
+
+  --danger: #ef4444;
+  --danger-vivid: #f87171;
+  --danger-text: #f87171;
+  --danger-subtle: #2a1416;
+  --danger-border: #4a2125;
+
+  --info: #3b82f6;
+  --info-vivid: #60a5fa;
+  --info-text: #60a5fa;
+  --info-subtle: #11203a;
+  --info-border: #1d3a66;
+
+  --positive: #22c55e;
+  --positive-subtle: #10271a;
+
+  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.4);
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.5), 0 1px 2px -1px rgb(0 0 0 / 0.4);
+  --shadow-md: 0 4px 8px -2px rgb(0 0 0 / 0.55), 0 2px 4px -2px rgb(0 0 0 / 0.45);
+  --shadow-lg: 0 12px 20px -4px rgb(0 0 0 / 0.6), 0 4px 8px -4px rgb(0 0 0 / 0.5);
+  --shadow-xl: 0 24px 40px -8px rgb(0 0 0 / 0.7), 0 8px 16px -8px rgb(0 0 0 / 0.55);
+  --ring-hairline: inset 0 0 0 1px rgb(255 255 255 / 0.08);
+  --edge-highlight: inset 0 1px 0 0 rgb(255 255 255 / 0.06);
+
+  --shadow: var(--shadow-md);
   --skeleton: #262a31;
+}
+
+/* ── Theme-independent tokens ─────────────────────────────────────────────────── */
+:root {
+  /* Type families. The variable-font family names MUST be exact (a plain "Inter" silently
+   * falls back to system-ui). Metric-matched fallbacks are injected by Fontaine (vite.config). */
+  --font-sans: "Inter Variable", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+
+  /* Spacing — 4px base + 10/14 half-steps (the codebase leaned on 10px & 14px heavily). */
+  --space-0: 0;
+  --space-0_5: 2px;
+  --space-1: 4px;
+  --space-1_5: 6px;
+  --space-2: 8px;
+  --space-2_5: 10px;
+  --space-3: 12px;
+  --space-3_5: 14px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* Radius — 6-stop. */
+  --radius-xs: 4px; /* chips, score badge, tag, segmented inner, factor track */
+  --radius-sm: 6px; /* buttons, inputs, dropdown items */
+  --radius-md: 8px; /* cards, panels, popovers */
+  --radius-lg: 12px; /* large surfaces, sheet body */
+  --radius-xl: 16px; /* modal, sheet top corners, chat container */
+  --radius-pill: 999px; /* FAB, pills, toggle thumb */
+
+  /* Control heights (coarse pointers bump to 44px below). */
+  --ctl-h-sm: 28px;
+  --ctl-h-md: 32px;
+  --ctl-h-lg: 40px;
+
+  /* Motion — Material 3 tokens; animate transform/opacity only. */
+  --dur-fast: 120ms; /* hover, focus, toggle, chip, slider thumb */
+  --dur-base: 180ms; /* popover/tooltip/dropdown, segmented slide */
+  --dur-slow: 240ms; /* panel collapse/expand, modal */
+  --dur-slower: 320ms; /* full bottom-sheet open */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1); /* in-place default */
+  --ease-decelerate: cubic-bezier(0.05, 0.7, 0.1, 1); /* entering */
+  --ease-accelerate: cubic-bezier(0.3, 0, 0.8, 0.15); /* exiting */
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1); /* sliders */
+
+  /* Focus ring — keep `outline` (clip-resilient; the densest rows use overflow:hidden). */
+  --focus-ring: var(--accent-vivid);
+
+  /* Mobile layout tokens (bottom sheet / FAB / map controls). */
+  --sheet-peek: 104px;
+  --sheet-half: 52dvh;
+  --sheet-full: 92dvh;
+  --fab: 56px;
+  --map-ctrl: 44px;
+  --gutter: 16px;
 }
 
 /* ── Reset / base ────────────────────────────────────────────────────────────── */
@@ -60,12 +214,13 @@ body,
 }
 
 body {
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  font-size: 14px;
-  line-height: 1.45;
+  font-family: var(--font-sans);
+  font-size: 0.875rem; /* 14px */
+  line-height: 1.5;
   color: var(--text);
   background: var(--bg);
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 h1,
@@ -81,22 +236,45 @@ button {
   cursor: pointer;
 }
 
+/* ── Numeric / code utilities ─────────────────────────────────────────────────────
+ * Inter defaults to PROPORTIONAL figures — numeric columns misalign without `.num`. Apply
+ * `.num` to every aligned number/stat (scores, acreage, slope %, km, MW). `.code` is for
+ * lat/long + APN codes only (monospace + slashed-zero), never for prose. */
+.num {
+  font-variant-numeric: tabular-nums;
+}
+.code {
+  font-family: var(--font-mono);
+  font-variant-numeric: slashed-zero;
+}
+
 /* ── Accessibility (GEO-28) ──────────────────────────────────────────────────────
  * Visible keyboard focus on every interactive element (WCAG 2.4.7 / 2.4.11). Pointer
- * clicks don't show the ring (:focus-visible); keyboard focus does. The map canvas is
- * keyboard-pannable (MapLibre), so it gets a focus ring too.
- */
+ * clicks don't show the ring (:focus-visible); keyboard focus does. We keep an OUTLINE (not an
+ * outset box-shadow) because the densest rows (.results-row, .saved-list__item, .factor-bar__track)
+ * use overflow:hidden, which would clip a box-shadow ring. */
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 .maplibregl-canvas:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus-ring);
   outline-offset: -2px;
 }
+/* On-map floating controls get a haloed ring so it keeps ≥3:1 over any tile. */
+.on-map:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--focus-ring);
+}
+@media (forced-colors: active) {
+  :focus-visible {
+    outline: 2px solid Highlight;
+  }
+}
 
-/* Honour the OS "reduce motion" setting app-wide: no transitions/animations, instant
- * scroll. JS paths (flyTo, scrollIntoView) check the same media query. */
+/* Honour the OS "reduce motion" setting app-wide: no transitions/animations, instant scroll.
+ * State changes (focus, selection, aria-live) are NOT affected — only movement is stripped.
+ * JS paths (flyTo, scrollIntoView) check the same media query. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -116,18 +294,46 @@ button {
   height: 100%;
 }
 
+/* A panel that floats over the busy map raster composes a baked-in hairline ring + shadow so
+ * it separates on a light tile, a dark tile, and imagery alike. */
+.overlay-panel {
+  box-shadow: var(--ring-hairline), var(--shadow-lg);
+}
+.overlay-modal {
+  box-shadow: var(--ring-hairline), var(--edge-highlight), var(--shadow-xl);
+}
+
 /* Theme the MapLibre control chrome to match the app surfaces. */
 .maplibregl-ctrl-group {
   background: var(--surface);
-  box-shadow: var(--shadow);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--ring-hairline), var(--shadow-md);
 }
 .maplibregl-ctrl-group button + button {
   border-top-color: var(--border);
 }
+.maplibregl-ctrl-group button {
+  color: var(--text);
+}
 .maplibregl-ctrl-attrib {
   background: color-mix(in srgb, var(--surface) 80%, transparent);
   color: var(--text-muted);
+  border-radius: var(--radius-xs);
 }
 .maplibregl-ctrl-attrib a {
   color: var(--text-muted);
+}
+.maplibregl-ctrl-scale {
+  border-color: var(--border-strong);
+  background: color-mix(in srgb, var(--surface) 80%, transparent);
+  color: var(--text-muted);
+  border-radius: 0 0 var(--radius-xs) var(--radius-xs);
+}
+
+/* Comfortable map controls on touch (WCAG 2.5.8 / Apple 44pt). */
+@media (pointer: coarse) {
+  .maplibregl-ctrl-group button {
+    width: var(--map-ctrl);
+    height: var(--map-ctrl);
+  }
 }

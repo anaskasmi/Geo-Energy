@@ -3,7 +3,9 @@ import maplibregl from "maplibre-gl";
 import { GeoJsonLayer } from "@deck.gl/layers";
 import { MapboxOverlay } from "@deck.gl/mapbox";
 import type { Feature } from "geojson";
+import { X } from "lucide-react";
 
+import { Icon } from "../components/Icon";
 import type { ScoredFeature, ScoredFeatureProps } from "../api/client";
 import { applyBasemap, buildBaseStyle } from "../theme/basemap";
 import { useTheme } from "../theme/useTheme";
@@ -11,13 +13,23 @@ import { MAP_CENTER, MAP_ZOOM, PARCELS_FILL_LAYER, PARCELS_SOURCE_ID } from "./c
 import { DrawController } from "./DrawController";
 import { applyLayerState, RESULT_LAYER_ID, scoreColor } from "./layers";
 import type { ParcelInfo } from "./MapContext";
+import { addOverlayLayers } from "./overlays";
 import { addParcelsLayer, registerPmtilesProtocol, setSelectedParcel } from "./pmtiles";
 import { useMapStore } from "./useMapStore";
 import { haptic } from "../utils/haptics";
 
-/** Selected-parcel outline color in the deck overlay (matches HIGHLIGHT_COLOR #f97316). */
-const HIGHLIGHT_RGB: [number, number, number] = [249, 115, 22];
+// Selected-parcel highlight in the deck overlay: a hue-free double casing (design system §4.4)
+// — a wide white outer line drawn UNDER a near-black inner line — instead of the old orange,
+// so it never collides with a categorical layer hue and reads on any basemap.
+const HIGHLIGHT_OUTER_RGBA: [number, number, number, number] = [255, 255, 255, 235];
+const HIGHLIGHT_INNER_RGBA: [number, number, number, number] = [17, 24, 39, 255];
+// Casing for NON-selected scored parcels, by basemap luminance (§4.2): a dark hairline rescues
+// the bright-yellow high-score fills on a light/satellite basemap; a light hairline rescues the
+// dark-purple low-score fills on a dark basemap.
+const CASING_DARK_RGBA: [number, number, number, number] = [20, 20, 30, 150];
+const CASING_LIGHT_RGBA: [number, number, number, number] = [255, 255, 255, 150];
 const SCORED_LAYER_ID = "scored-parcels";
+const SCORED_HIGHLIGHT_LAYER_ID = "scored-parcels-highlight";
 
 function escapeHtml(value: unknown): string {
   return String(value ?? "")
@@ -162,6 +174,7 @@ export function MapView() {
     // style.load fires only once — the drawing's undo history is never corrupted by a rebuild.
     map.on("style.load", () => {
       addParcelsLayer(map);
+      addOverlayLayers(map);
       applyLayerState(map, layersRef.current);
       setSelectedParcel(map, selectedRef.current?.id ?? null);
       if (!drawRef.current) {
@@ -398,36 +411,64 @@ export function MapView() {
     const overlay = overlayRef.current;
     if (!overlay) return;
     const toggle = resultToggle;
+    const visible = toggle?.visible ?? true;
+    const opacity = toggle?.opacity ?? 0.85;
     const selectedId = selected?.id ?? null;
     const data = scoredData;
     const props = (f: Feature) => f.properties as unknown as ScoredFeatureProps;
-    const layer =
-      data.length > 0
-        ? new GeoJsonLayer({
-            id: SCORED_LAYER_ID,
-            data,
-            pickable: true,
+    // Resolve the basemap to a luminance so the non-selected casing stays legible (§4.2): a
+    // light basemap (or satellite imagery, or streets) wants a dark hairline; only Dark Matter
+    // wants a light one.
+    const concreteBasemap = basemap === "auto" ? resolvedTheme : basemap;
+    const casing = concreteBasemap === "dark" ? CASING_LIGHT_RGBA : CASING_DARK_RGBA;
+
+    const layers: GeoJsonLayer[] = [];
+    if (data.length > 0) {
+      // White outer casing for the selected parcel, drawn first (under the fills' inner line).
+      const selectedFeature = selectedId != null ? data.find((f) => f.id === selectedId) : undefined;
+      if (selectedFeature) {
+        layers.push(
+          new GeoJsonLayer({
+            id: SCORED_HIGHLIGHT_LAYER_ID,
+            data: [selectedFeature],
+            pickable: false,
             stroked: true,
-            filled: true,
-            visible: toggle?.visible ?? true,
-            opacity: toggle?.opacity ?? 0.85,
-            getFillColor: (f: Feature) => scoreColor(props(f).score, 220),
-            getLineColor: (f: Feature) =>
-              f.id === selectedId ? [...HIGHLIGHT_RGB, 255] : [255, 255, 255, 150],
-            getLineWidth: (f: Feature) => (f.id === selectedId ? 3 : 1),
+            filled: false,
+            visible,
+            opacity,
+            getLineColor: HIGHLIGHT_OUTER_RGBA,
+            getLineWidth: 4,
             lineWidthUnits: "pixels",
-            lineWidthMinPixels: 1,
-            onClick: (info) => {
-              if (info.object) setSelected(parcelFromScored(info.object as ScoredFeature));
-            },
-            updateTriggers: {
-              getLineColor: [selectedId],
-              getLineWidth: [selectedId],
-            },
-          })
-        : null;
-    overlay.setProps({ layers: layer ? [layer] : [] });
-  }, [scoredData, resultToggle, selected, setSelected]);
+            lineWidthMinPixels: 3,
+          }),
+        );
+      }
+      layers.push(
+        new GeoJsonLayer({
+          id: SCORED_LAYER_ID,
+          data,
+          pickable: true,
+          stroked: true,
+          filled: true,
+          visible,
+          opacity,
+          getFillColor: (f: Feature) => scoreColor(props(f).score, 205),
+          getLineColor: (f: Feature) => (f.id === selectedId ? HIGHLIGHT_INNER_RGBA : casing),
+          getLineWidth: (f: Feature) => (f.id === selectedId ? 2 : 1),
+          lineWidthUnits: "pixels",
+          lineWidthMinPixels: 1,
+          onClick: (info) => {
+            if (info.object) setSelected(parcelFromScored(info.object as ScoredFeature));
+          },
+          updateTriggers: {
+            getLineColor: [selectedId, casing],
+            getLineWidth: [selectedId],
+          },
+        }),
+      );
+    }
+    overlay.setProps({ layers });
+  }, [scoredData, resultToggle, selected, setSelected, basemap, resolvedTheme]);
 
   return (
     <>
@@ -444,7 +485,7 @@ export function MapView() {
             aria-label="Dismiss"
             onClick={() => setLayerNoticeDismissed(true)}
           >
-            ✕
+            <Icon icon={X} size={14} />
           </button>
         </div>
       )}

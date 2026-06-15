@@ -80,6 +80,20 @@ def score_feature_collection(rows: list[dict], *, offset: int, meta: dict) -> di
     return {"type": "FeatureCollection", "features": features, "meta": {**meta, "count": len(features)}}
 
 
+def layer_feature_collection(rows: list[dict]) -> dict:
+    """Plain GeoJSON FeatureCollection for a static map overlay layer (transmission / substations
+    / flood). Each row carries a ``geometry_json`` column (``ST_AsGeoJSON``); every other column
+    becomes a feature property. Coordinates are rounded like the scored features."""
+    features = []
+    for row in rows:
+        geom = _geometry(row)
+        if geom is None:
+            continue
+        props = {k: v for k, v in row.items() if k != "geometry_json"}
+        features.append({"type": "Feature", "geometry": geom, "properties": props})
+    return {"type": "FeatureCollection", "features": features}
+
+
 def explain_response(row: dict, *, use_case: str, weights: dict[str, float]) -> dict:
     """Per-factor breakdown + raw values + which Stage-A exclusions a parcel fails."""
     breakdown = [asdict(b) for b in scoring.compute_breakdown(weights, row)]

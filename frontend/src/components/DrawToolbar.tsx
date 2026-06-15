@@ -1,5 +1,8 @@
+import { Eraser, Hexagon, Redo2, SquarePen, Trash2, Undo2 } from "lucide-react";
+
 import { useMapStore } from "../map/useMapStore";
 import type { DrawMode } from "../map/MapContext";
+import { Icon } from "./Icon";
 
 const SQ_METERS_PER_ACRE = 4046.8564224;
 
@@ -32,7 +35,7 @@ export function DrawToolbar() {
   const choose = (mode: DrawMode) => setDrawMode(drawMode === mode ? "idle" : mode);
 
   return (
-    <div className="draw-toolbar" role="toolbar" aria-label="Drawing tools">
+    <div className="draw-tools" role="toolbar" aria-label="Drawing tools">
       <button
         type="button"
         className="draw-btn"
@@ -40,7 +43,7 @@ export function DrawToolbar() {
         onClick={() => choose("draw")}
         title="Draw a polygon (Esc cancels)"
       >
-        <span aria-hidden="true">▱</span> Draw
+        <Icon icon={Hexagon} size={16} /> Draw
       </button>
       <button
         type="button"
@@ -49,7 +52,7 @@ export function DrawToolbar() {
         onClick={() => choose("edit")}
         title="Edit: drag vertices, add midpoints, delete points"
       >
-        <span aria-hidden="true">✎</span> Edit
+        <Icon icon={SquarePen} size={16} /> Edit
       </button>
       <span className="draw-sep" aria-hidden="true" />
       <button
@@ -60,7 +63,7 @@ export function DrawToolbar() {
         title="Undo (Ctrl+Z)"
         aria-label="Undo"
       >
-        ↶
+        <Icon icon={Undo2} size={16} />
       </button>
       <button
         type="button"
@@ -70,7 +73,7 @@ export function DrawToolbar() {
         title="Redo (Ctrl+Y)"
         aria-label="Redo"
       >
-        ↷
+        <Icon icon={Redo2} size={16} />
       </button>
       <button
         type="button"
@@ -80,7 +83,7 @@ export function DrawToolbar() {
         title="Delete selected polygon (Del) — select it in Edit mode first"
         aria-label="Delete selected polygon"
       >
-        ✕
+        <Icon icon={Trash2} size={16} />
       </button>
       <button
         type="button"
@@ -89,11 +92,13 @@ export function DrawToolbar() {
         title="Clear all drawings"
         aria-label="Clear all drawings"
       >
-        🗑
+        <Icon icon={Eraser} size={16} />
       </button>
-      <span className="draw-area" aria-live="polite">
-        Area: {formatArea(drawAreaSqm)}
-      </span>
+      {drawAreaSqm != null && (
+        <span className="draw-area num" aria-live="polite">
+          {formatArea(drawAreaSqm)}
+        </span>
+      )}
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Download, Link2, Save, Trash2 } from "lucide-react";
 
 import { copyText } from "../export/clipboard";
 import { exportCSV, exportGeoJSON } from "../export/exporters";
@@ -12,6 +13,7 @@ import {
 } from "../state/savedAnalyses";
 import type { SavedAnalysis } from "../state/savedAnalyses";
 import { applyShareState, buildShareUrl, currentShareState } from "../state/useUrlState";
+import { Icon } from "./Icon";
 
 /**
  * Share, save & export controls (GEO-31). Lives in the sidebar:
@@ -65,6 +67,7 @@ export function ShareControl() {
     <div className="share-control">
       <div className="share-control__row">
         <button type="button" className="panel-btn" onClick={onCopyLink}>
+          <Icon icon={Link2} size={16} />
           Copy share link
         </button>
       </div>
@@ -77,6 +80,7 @@ export function ShareControl() {
           disabled={!hasResults}
           title={hasResults ? "Download scored parcels as GeoJSON" : "Score an area first"}
         >
+          <Icon icon={Download} size={16} />
           Export GeoJSON
         </button>
         <button
@@ -86,6 +90,7 @@ export function ShareControl() {
           disabled={!hasResults}
           title={hasResults ? "Download scored parcels as CSV" : "Score an area first"}
         >
+          <Icon icon={Download} size={16} />
           Export CSV
         </button>
       </div>
@@ -110,6 +115,7 @@ export function ShareControl() {
           disabled={!canStore || !name.trim() || !hasArea}
           title={hasArea ? "Save the current analysis" : "Draw an area to save it"}
         >
+          <Icon icon={Save} size={16} />
           Save
         </button>
       </div>
@@ -143,7 +149,7 @@ export function ShareControl() {
                 aria-label={`Delete "${a.name}"`}
                 title="Delete"
               >
-                ✕
+                <Icon icon={Trash2} size={14} />
               </button>
             </li>
           ))}

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { LandPlot, ListOrdered, X } from "lucide-react";
 
 import { placeGeometry } from "../agent/mockAgent";
 import type { ScoredFeature } from "../api/client";
@@ -10,6 +11,7 @@ import { useContextSummary } from "../results/hooks";
 import { geometryCenter } from "../state/shareState";
 import { haptic } from "../utils/haptics";
 import { EmptyState } from "./EmptyState";
+import { Icon } from "./Icon";
 import { ParcelDetail } from "./ParcelDetail";
 
 interface Filters {
@@ -117,7 +119,10 @@ export function ResultsPanel() {
           {srSummary}
         </p>
         <div className="results-head">
-          <h2 className="panel-section__title">Results</h2>
+          <h2 className="panel-section__title">
+            <Icon icon={ListOrdered} size={13} />
+            Results
+          </h2>
           {features.length > 0 && (
             <label className="results-sort">
               <span className="visually-hidden">Sort by</span>
@@ -140,7 +145,7 @@ export function ResultsPanel() {
               {Math.round(context.total.active_total_mw ?? 0).toLocaleString()} MW active)
             </span>
             <button type="button" className="context-banner__close" aria-label="Dismiss" onClick={() => setBannerOpen(false)}>
-              ✕
+              <Icon icon={X} size={14} />
             </button>
           </div>
         )}
@@ -282,10 +287,15 @@ export function ResultsPanel() {
         )}
       </section>
 
-      <section className="panel-section">
-        <h2 className="panel-section__title">Detail</h2>
-        <ParcelDetail />
-      </section>
+      {selected && (
+        <section className="panel-section">
+          <h2 className="panel-section__title">
+            <Icon icon={LandPlot} size={13} />
+            Detail
+          </h2>
+          <ParcelDetail />
+        </section>
+      )}
     </div>
   );
 }

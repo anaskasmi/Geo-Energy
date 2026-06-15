@@ -3,9 +3,14 @@ import { Protocol } from "pmtiles";
 
 import { PARCELS_PMTILES_URL } from "../config/env";
 import {
-  HIGHLIGHT_COLOR,
+  HIGHLIGHT_INNER_COLOR,
+  HIGHLIGHT_INNER_WIDTH,
+  HIGHLIGHT_OUTER_COLOR,
+  HIGHLIGHT_OUTER_WIDTH,
+  PARCELS_COLOR,
   PARCELS_FILL_LAYER,
   PARCELS_HIGHLIGHT_LAYER,
+  PARCELS_HIGHLIGHT_OUTER_LAYER,
   PARCELS_LINE_LAYER,
   PARCELS_SOURCE_ID,
   PARCELS_SOURCE_LAYER,
@@ -46,7 +51,7 @@ export function addParcelsLayer(map: maplibregl.Map): void {
       type: "fill",
       source: PARCELS_SOURCE_ID,
       "source-layer": PARCELS_SOURCE_LAYER,
-      paint: { "fill-color": "#2563eb", "fill-opacity": 0.12 },
+      paint: { "fill-color": PARCELS_COLOR, "fill-opacity": 0.1 },
     });
 
     map.addLayer({
@@ -54,18 +59,29 @@ export function addParcelsLayer(map: maplibregl.Map): void {
       type: "line",
       source: PARCELS_SOURCE_ID,
       "source-layer": PARCELS_SOURCE_LAYER,
-      paint: { "line-color": "#2563eb", "line-width": 0.6, "line-opacity": 0.7 },
+      paint: { "line-color": PARCELS_COLOR, "line-width": 0.75, "line-opacity": 0.75 },
     });
 
-    // Selection highlight: a thick contrasting outline filtered to the selected parcel id.
-    // Starts matching nothing (id = -1) until a parcel is selected.
+    // Selection highlight: a hue-free DOUBLE CASING filtered to the selected parcel id (§4.4).
+    // Outer white line (wider) is added first so the inner near-black line draws on top of it,
+    // producing a white halo that reads on any basemap. Both start matching nothing (id = -1).
+    map.addLayer({
+      id: PARCELS_HIGHLIGHT_OUTER_LAYER,
+      type: "line",
+      source: PARCELS_SOURCE_ID,
+      "source-layer": PARCELS_SOURCE_LAYER,
+      filter: ["==", ["get", "id"], -1],
+      layout: { "line-join": "round" },
+      paint: { "line-color": HIGHLIGHT_OUTER_COLOR, "line-width": HIGHLIGHT_OUTER_WIDTH, "line-opacity": 0.95 },
+    });
     map.addLayer({
       id: PARCELS_HIGHLIGHT_LAYER,
       type: "line",
       source: PARCELS_SOURCE_ID,
       "source-layer": PARCELS_SOURCE_LAYER,
       filter: ["==", ["get", "id"], -1],
-      paint: { "line-color": HIGHLIGHT_COLOR, "line-width": 2.5, "line-opacity": 0.95 },
+      layout: { "line-join": "round" },
+      paint: { "line-color": HIGHLIGHT_INNER_COLOR, "line-width": HIGHLIGHT_INNER_WIDTH, "line-opacity": 1 },
     });
   } catch (err) {
     // Missing tiles / source-layer mismatch must not break the basemap render.
@@ -73,8 +89,9 @@ export function addParcelsLayer(map: maplibregl.Map): void {
   }
 }
 
-/** Highlight a parcel by id (or clear the highlight when id is null). */
+/** Highlight a parcel by id (or clear the highlight when id is null). Updates both casing layers. */
 export function setSelectedParcel(map: maplibregl.Map, id: number | string | null): void {
-  if (!map.getLayer(PARCELS_HIGHLIGHT_LAYER)) return;
-  map.setFilter(PARCELS_HIGHLIGHT_LAYER, ["==", ["get", "id"], id ?? -1]);
+  const filter: maplibregl.FilterSpecification = ["==", ["get", "id"], id ?? -1];
+  if (map.getLayer(PARCELS_HIGHLIGHT_OUTER_LAYER)) map.setFilter(PARCELS_HIGHLIGHT_OUTER_LAYER, filter);
+  if (map.getLayer(PARCELS_HIGHLIGHT_LAYER)) map.setFilter(PARCELS_HIGHLIGHT_LAYER, filter);
 }

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Copy, FileDown } from "lucide-react";
 
 import { apiClient } from "../api/client";
 import type { ContextResponse } from "../api/client";
@@ -8,6 +9,7 @@ import { scoreColorCss, scoreTextColor } from "../map/layers";
 import { useMapStore } from "../map/useMapStore";
 import { useExplain } from "../results/hooks";
 import { fmtAcres, whyThisRank } from "../results/format";
+import { Icon } from "./Icon";
 
 const EXCLUSION_LABELS: Record<string, string> = {
   min_acres: "Below minimum acreage",
@@ -168,6 +170,7 @@ export function ParcelDetail() {
 
       <div className="parcel-detail__actions">
         <button type="button" className="panel-btn" onClick={onCopySummary}>
+          <Icon icon={Copy} size={16} />
           Copy summary
         </button>
         <button
@@ -177,6 +180,7 @@ export function ParcelDetail() {
           disabled={pdfBusy}
           aria-busy={pdfBusy}
         >
+          <Icon icon={FileDown} size={16} />
           {pdfBusy ? "Preparing PDF…" : "Download PDF"}
         </button>
       </div>

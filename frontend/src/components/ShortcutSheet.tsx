@@ -1,7 +1,9 @@
 import { useEffect, useRef } from "react";
 import type { KeyboardEvent } from "react";
+import { X } from "lucide-react";
 
 import { SHORTCUTS } from "../hooks/useKeyboardShortcuts";
+import { Icon } from "./Icon";
 
 const FOCUSABLE = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
 
@@ -66,7 +68,7 @@ export function ShortcutSheet({ open, onClose }: { open: boolean; onClose: () =>
         <div className="modal__head">
           <h2 className="modal__title">Keyboard shortcuts</h2>
           <button ref={closeRef} type="button" className="modal__close" aria-label="Close" onClick={onClose}>
-            ✕
+            <Icon icon={X} size={16} />
           </button>
         </div>
         <dl className="shortcut-list">
