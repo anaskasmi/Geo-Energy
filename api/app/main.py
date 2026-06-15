@@ -26,9 +26,10 @@ import duckdb
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from app import agent as agent_mod
 from app import db, perf, scoring, serialize
 from app.models import ScoreRequest, UseCase
 
@@ -87,10 +88,13 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Performance layer (GEO-18). Middleware added last wraps outermost, so add ETag first (inner —
-# it hashes the uncompressed body) then GZip (outer — compresses the final bytes ≥ 512 B).
+# Performance layer (GEO-18) + request-timing observability (GEO-37). Middleware added last wraps
+# outermost, so: ETag first (innermost — hashes the uncompressed body), then GZip (compresses the
+# final bytes ≥ 512 B), then RequestTiming last (OUTERMOST — measures total handling and sees the
+# final status/headers like X-Cache, without double counting).
 app.add_middleware(perf.ETagMiddleware)
 app.add_middleware(GZipMiddleware, minimum_size=512)
+app.add_middleware(perf.RequestTimingMiddleware)
 
 
 @app.exception_handler(StarletteHTTPException)
@@ -288,6 +292,26 @@ async def context(cur=Depends(get_cursor)) -> dict:
         return serialize.context_response([])
     rows = [dict(zip(cols, r)) for r in data]
     return serialize.context_response(rows)
+
+
+@app.post("/api/agent")
+async def agent_endpoint(req: agent_mod.AgentRequest, request: Request) -> StreamingResponse:
+    """Streaming site-selection agent (GEO-21): Server-Sent Events over POST.
+
+    The pydantic ``AgentRequest`` rejects an oversized message with 422 BEFORE any model call
+    (GEO-37 key-exhaustion guard). The SSE generator (:func:`app.agent.stream_agent`) owns the rest
+    — per-process concurrency cap, a per-request cursor on the shared read-only handle,
+    client-disconnect/timeout aborts, and graceful key-safe ``error`` events — so this handler never
+    returns a 500. Event protocol: ``step`` / ``token`` / ``result`` / ``done`` / ``error``.
+    """
+    con = getattr(app.state, "con", None)
+    zoning_rules = getattr(app.state, "zoning_rules", {}) or {}
+    generator = agent_mod.stream_agent(
+        message=req.message, request=request, con=con, zoning_rules=zoning_rules,
+    )
+    return StreamingResponse(
+        generator, media_type="text/event-stream", headers=agent_mod.SSE_HEADERS,
+    )
 
 
 @app.get("/")

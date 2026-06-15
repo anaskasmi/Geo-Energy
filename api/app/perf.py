@@ -15,13 +15,17 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import threading
+import time
 from collections import OrderedDict
 from typing import Any
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
+
+log = logging.getLogger("api.access")
 
 
 def _opaque(tag: str) -> str:
@@ -79,6 +83,49 @@ class ETagMiddleware(BaseHTTPMiddleware):
             if key.lower() != "content-length":
                 rebuilt.headers[key] = value
         return rebuilt
+
+
+class RequestTimingMiddleware:
+    """Pure-ASGI middleware (GEO-37): log ONE structured INFO line per HTTP request.
+
+    Emits method, route template (low-cardinality, e.g. ``/api/explain/{parcel_id}`` not
+    ``/api/explain/123``; falls back to the raw path), status, duration_ms, and ``X-Cache`` when
+    present. Added OUTERMOST in main so the duration covers the whole handler + inner middleware
+    (ETag/GZip) without double counting. Deliberately cheap: it only inspects the response-start
+    message and never buffers the body or touches request bodies/secrets.
+    """
+
+    def __init__(self, app) -> None:
+        self.app = app
+
+    async def __call__(self, scope, receive, send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        start = time.perf_counter()
+        info: dict[str, Any] = {"status": 0, "x_cache": None}
+
+        async def send_wrapper(message) -> None:
+            if message["type"] == "http.response.start":
+                info["status"] = message["status"]
+                for key, value in message.get("headers", []):
+                    if key.lower() == b"x-cache":
+                        info["x_cache"] = value.decode("latin-1")
+            await send(message)
+
+        try:
+            await self.app(scope, receive, send_wrapper)
+        finally:
+            duration_ms = (time.perf_counter() - start) * 1000.0
+            route = scope.get("route")
+            path = getattr(route, "path", None) or scope.get("path", "")
+            method = scope.get("method", "-")
+            cache = f" x_cache={info['x_cache']}" if info["x_cache"] else ""
+            log.info(
+                "request method=%s path=%s status=%d duration_ms=%.1f%s",
+                method, path, info["status"], duration_ms, cache,
+            )
 
 
 class ResultCache:
