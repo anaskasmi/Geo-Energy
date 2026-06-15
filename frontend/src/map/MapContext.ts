@@ -1,5 +1,6 @@
 import { createContext } from "react";
 
+import type { GeoJsonGeometry, ScoreFeatureCollection, UseCase } from "../api/client";
 import type { BasemapId } from "../theme/basemap";
 import type { LayerStateMap } from "./layers";
 
@@ -12,6 +13,9 @@ export interface ParcelInfo {
 
 /** Map interaction modes for the drawing tool (GEO-23). */
 export type DrawMode = "idle" | "draw" | "edit";
+
+/** Lifecycle of a /api/score request (GEO-24). */
+export type ScoreStatus = "idle" | "scoring" | "done" | "error";
 
 /** Imperative draw actions, wired by MapView (which owns the terra-draw controller). */
 export interface DrawApi {
@@ -52,6 +56,24 @@ export interface MapStore {
   redo: () => void;
   clearDraw: () => void;
   deleteSelection: () => void;
+
+  // --- Scoring (GEO-24/25) ---------------------------------------------------
+  /** The use case scored against (drives weights + prohibited zoning). */
+  useCase: UseCase;
+  setUseCase: (useCase: UseCase) => void;
+  /** The drawn search area (Polygon/MultiPolygon, EPSG:4326), surfaced by the DrawController. */
+  drawnPolygon: GeoJsonGeometry | null;
+  setDrawnPolygon: (geom: GeoJsonGeometry | null) => void;
+  /** Latest scored FeatureCollection from POST /api/score. */
+  scoreResult: ScoreFeatureCollection | null;
+  setScoreResult: (result: ScoreFeatureCollection | null) => void;
+  scoreStatus: ScoreStatus;
+  scoreError: string | null;
+  setScoreStatus: (status: ScoreStatus, error?: string | null) => void;
+
+  /** Fly/zoom the map to a [lng, lat] (registered by MapView; respects reduced-motion). */
+  registerFlyTo: (fly: ((lngLat: [number, number], zoom?: number) => void) | null) => void;
+  flyTo: (lngLat: [number, number], zoom?: number) => void;
 }
 
 export const MapContext = createContext<MapStore | null>(null);

@@ -1,5 +1,6 @@
 import { useIsDesktop } from "../hooks/useBreakpoint";
 import { MapView } from "../map/MapView";
+import { useScoring } from "../results/useScoring";
 import { BottomSheet } from "./BottomSheet";
 import { DrawToolbar } from "./DrawToolbar";
 import { ResultsPanel } from "./ResultsPanel";
@@ -17,6 +18,7 @@ import { ThemeToggle } from "./ThemeToggle";
  */
 export function AppShell() {
   const isDesktop = useIsDesktop();
+  useScoring(); // debounced score of the drawn polygon (GEO-24); mounted once here
 
   if (isDesktop) {
     return (

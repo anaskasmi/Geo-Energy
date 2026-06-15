@@ -13,11 +13,19 @@ import type { GeoJSONStoreFeatures } from "terra-draw";
 
 import type { DrawMode } from "./MapContext";
 
+/** A GeoJSON geometry surfaced to React for scoring (Polygon, or MultiPolygon if several drawn). */
+export interface DrawnGeometry {
+  type: "Polygon" | "MultiPolygon";
+  coordinates: unknown;
+}
+
 /** Callbacks back into React state when the drawing changes. */
 export interface DrawControllerCallbacks {
   onArea: (sqm: number | null) => void;
   onHistory: (canUndo: boolean, canRedo: boolean) => void;
   onSelection: (hasSelection: boolean) => void;
+  /** The current drawn area as a single geometry (null when nothing is drawn). GEO-24. */
+  onGeometry: (geom: DrawnGeometry | null) => void;
 }
 
 type FeatureId = string | number;
@@ -51,6 +59,7 @@ export class DrawController {
     // recreate (after a basemap/theme swap) can't leave stale enabled buttons.
     this.cb.onHistory(false, false);
     this.cb.onSelection(false);
+    this.cb.onGeometry(null);
   }
 
   private create(): TerraDraw {
@@ -114,6 +123,25 @@ export class DrawController {
       total += area(feature as never);
     }
     this.cb.onArea(total > 0 ? total : null);
+    this.emitGeometry();
+  }
+
+  /** Surface the drawn area to React: one Polygon, or a MultiPolygon when several are drawn. */
+  private emitGeometry(): void {
+    const polys = this.polygons();
+    if (polys.length === 0) {
+      this.cb.onGeometry(null);
+      return;
+    }
+    if (polys.length === 1) {
+      const g = polys[0].geometry as { type: "Polygon"; coordinates: unknown };
+      this.cb.onGeometry({ type: "Polygon", coordinates: g.coordinates });
+      return;
+    }
+    this.cb.onGeometry({
+      type: "MultiPolygon",
+      coordinates: polys.map((p) => (p.geometry as { coordinates: unknown }).coordinates),
+    });
   }
 
   setMode(mode: DrawMode): void {
@@ -136,6 +164,7 @@ export class DrawController {
     this.cb.onArea(null);
     this.cb.onHistory(false, false);
     this.cb.onSelection(false);
+    this.cb.onGeometry(null);
   }
 
   destroy(): void {

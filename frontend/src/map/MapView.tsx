@@ -1,14 +1,22 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import maplibregl from "maplibre-gl";
+import { GeoJsonLayer } from "@deck.gl/layers";
+import { MapboxOverlay } from "@deck.gl/mapbox";
+import type { Feature } from "geojson";
 
+import type { ScoredFeature, ScoredFeatureProps } from "../api/client";
 import { applyBasemap, buildBaseStyle } from "../theme/basemap";
 import { useTheme } from "../theme/useTheme";
 import { MAP_CENTER, MAP_ZOOM, PARCELS_FILL_LAYER } from "./constants";
 import { DrawController } from "./DrawController";
-import { applyLayerState } from "./layers";
+import { applyLayerState, RESULT_LAYER_ID, scoreColor } from "./layers";
 import type { ParcelInfo } from "./MapContext";
 import { addParcelsLayer, registerPmtilesProtocol, setSelectedParcel } from "./pmtiles";
 import { useMapStore } from "./useMapStore";
+
+/** Selected-parcel outline color in the deck overlay (matches HIGHLIGHT_COLOR #f97316). */
+const HIGHLIGHT_RGB: [number, number, number] = [249, 115, 22];
+const SCORED_LAYER_ID = "scored-parcels";
 
 function escapeHtml(value: unknown): string {
   return String(value ?? "")
@@ -29,6 +37,11 @@ function parcelFromFeature(props: Record<string, unknown> | null): ParcelInfo {
   return { id, apn: (p.apn as string | undefined) ?? null, acres: toAcres(p.acres) };
 }
 
+function parcelFromScored(feature: ScoredFeature): ParcelInfo {
+  const p = feature.properties;
+  return { id: p.id, apn: p.apn ?? null, acres: p.acres ?? null };
+}
+
 /**
  * Renders the MapLibre GL map and all map interaction (GEO-26 controls/layers + GEO-23
  * drawing). MapView is the single owner of the map instance: it applies basemap/theme,
@@ -39,6 +52,7 @@ export function MapView() {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const drawRef = useRef<DrawController | null>(null);
+  const overlayRef = useRef<MapboxOverlay | null>(null);
   const firstStyleSwap = useRef(true);
 
   const { resolvedTheme } = useTheme();
@@ -48,11 +62,14 @@ export function MapView() {
     layers,
     selected,
     drawMode,
+    scoreResult,
     setSelected,
     setDrawAreaSqm,
     setDrawHistory,
     setCanDeleteSelection,
+    setDrawnPolygon,
     registerDrawApi,
+    registerFlyTo,
   } = store;
 
   // Refs so the once-registered map handlers read the latest state without re-binding.
@@ -83,6 +100,12 @@ export function MapView() {
     });
     mapRef.current = map;
 
+    // Dev-only handle for E2E/manual debugging (stripped from production builds by Vite's
+    // import.meta.env.DEV dead-code elimination). Never present in the shipped bundle.
+    if (import.meta.env.DEV) {
+      (window as unknown as { __map?: maplibregl.Map }).__map = map;
+    }
+
     // Controls: zoom + compass/reset-north, imperial scale bar, geolocate.
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: false, showCompass: true }), "top-right");
     map.addControl(new maplibregl.ScaleControl({ unit: "imperial" }), "bottom-left");
@@ -93,6 +116,17 @@ export function MapView() {
       }),
       "top-right",
     );
+
+    // Fly/zoom to a parcel when the results list requests it (GEO-25). Respects reduced-motion:
+    // an instant jump instead of an animated flight when the user prefers reduced motion.
+    registerFlyTo((lngLat, zoom) => {
+      const target = { center: lngLat, zoom: zoom ?? Math.max(map.getZoom(), 12) };
+      const reduce =
+        typeof window !== "undefined" &&
+        window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+      if (reduce) map.jumpTo(target);
+      else map.flyTo({ ...target, duration: 800, essential: true });
+    });
 
     // Add parcels + the drawing tool once the style loads. The basemap/theme effect swaps the
     // basemap IN PLACE (no setStyle), so these data layers + the draw controller persist and
@@ -106,6 +140,7 @@ export function MapView() {
           onArea: setDrawAreaSqm,
           onHistory: setDrawHistory,
           onSelection: setCanDeleteSelection,
+          onGeometry: setDrawnPolygon,
         });
         registerDrawApi({
           undo: () => drawRef.current?.undo(),
@@ -114,6 +149,12 @@ export function MapView() {
           deleteSelected: () => drawRef.current?.deleteSelected(),
         });
         drawRef.current.setMode(drawModeRef.current);
+      }
+      // deck.gl overlay for scored parcels (GEO-24), overlaid above the MapLibre canvas so it
+      // never disturbs the parcels/draw layers. Created once; updated via setProps below.
+      if (!overlayRef.current) {
+        overlayRef.current = new MapboxOverlay({ interleaved: false, layers: [] });
+        map.addControl(overlayRef.current as unknown as maplibregl.IControl);
       }
     });
 
@@ -154,6 +195,11 @@ export function MapView() {
       drawRef.current?.destroy();
       drawRef.current = null;
       registerDrawApi(null);
+      registerFlyTo(null);
+      if (overlayRef.current) {
+        map.removeControl(overlayRef.current as unknown as maplibregl.IControl);
+        overlayRef.current = null;
+      }
       map.remove();
       mapRef.current = null;
       firstStyleSwap.current = true;
@@ -191,6 +237,55 @@ export function MapView() {
   useEffect(() => {
     drawRef.current?.setMode(drawMode);
   }, [drawMode]);
+
+  // Stable scored-features array (new reference ONLY when scoreResult changes), so deck.gl can
+  // honor updateTriggers and recolor the selection outline without re-tessellating every fill.
+  const scoredData = useMemo(
+    () => (scoreResult?.features ?? []).filter((f) => f.geometry) as unknown as Feature[],
+    [scoreResult],
+  );
+  // The result layer toggle object keeps its reference unless the RESULT toggle itself changes
+  // (MapProvider replaces only the toggled entry), so an unrelated layer/opacity change here
+  // does not re-run this effect.
+  const resultToggle = layers[RESULT_LAYER_ID];
+
+  // Render scored parcels on the deck.gl overlay, colored by score and outlined when selected
+  // (GEO-24). Updated via setProps (no layer re-add); a stable data reference means selection
+  // recolors the outline only. An empty/absent result clears the overlay.
+  useEffect(() => {
+    const overlay = overlayRef.current;
+    if (!overlay) return;
+    const toggle = resultToggle;
+    const selectedId = selected?.id ?? null;
+    const data = scoredData;
+    const props = (f: Feature) => f.properties as unknown as ScoredFeatureProps;
+    const layer =
+      data.length > 0
+        ? new GeoJsonLayer({
+            id: SCORED_LAYER_ID,
+            data,
+            pickable: true,
+            stroked: true,
+            filled: true,
+            visible: toggle?.visible ?? true,
+            opacity: toggle?.opacity ?? 0.85,
+            getFillColor: (f: Feature) => scoreColor(props(f).score, 220),
+            getLineColor: (f: Feature) =>
+              f.id === selectedId ? [...HIGHLIGHT_RGB, 255] : [255, 255, 255, 150],
+            getLineWidth: (f: Feature) => (f.id === selectedId ? 3 : 1),
+            lineWidthUnits: "pixels",
+            lineWidthMinPixels: 1,
+            onClick: (info) => {
+              if (info.object) setSelected(parcelFromScored(info.object as ScoredFeature));
+            },
+            updateTriggers: {
+              getLineColor: [selectedId],
+              getLineWidth: [selectedId],
+            },
+          })
+        : null;
+    overlay.setProps({ layers: layer ? [layer] : [] });
+  }, [scoredData, resultToggle, selected, setSelected]);
 
   return <div ref={containerRef} className="map-view" aria-label="Map" role="region" />;
 }

@@ -92,16 +92,56 @@ export const LAYERS: LayerDef[] = [
     label: "Suitability score",
     swatch: "#1a9850",
     symbol: "ramp",
-    available: false,
+    // Rendered by the deck.gl overlay (GEO-24), not a native MapLibre layer — so mapLayers is
+    // empty and MapView reads this toggle's visibility/opacity to drive the overlay directly.
+    available: true,
     mapLayers: [],
     defaultVisible: true,
-    defaultOpacity: 1,
-    note: SOON,
+    defaultOpacity: 0.85,
   },
 ];
 
-/** Low → high suitability color ramp for the legend (and the future score layer). */
+/** Logical layer id for the deck.gl scored-parcels overlay (GEO-24). */
+export const RESULT_LAYER_ID = "result";
+
+/** Low → high suitability color ramp for the legend + the score overlay. */
 export const SCORE_RAMP = ["#d73027", "#fc8d59", "#fee08b", "#91cf60", "#1a9850"];
+
+function hexToRgb(hex: string): [number, number, number] {
+  const n = parseInt(hex.slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+const SCORE_RAMP_RGB = SCORE_RAMP.map(hexToRgb);
+
+/** Interpolate the score ramp (0..100) to an RGBA color for the deck.gl overlay. */
+export function scoreColor(score: number | null | undefined, alpha = 200): [number, number, number, number] {
+  const t = Math.max(0, Math.min(1, (score ?? 0) / 100));
+  const seg = t * (SCORE_RAMP_RGB.length - 1);
+  const i = Math.min(SCORE_RAMP_RGB.length - 2, Math.floor(seg));
+  const f = seg - i;
+  const [ar, ag, ab] = SCORE_RAMP_RGB[i];
+  const [br, bg, bb] = SCORE_RAMP_RGB[i + 1];
+  return [
+    Math.round(ar + (br - ar) * f),
+    Math.round(ag + (bg - ag) * f),
+    Math.round(ab + (bb - ab) * f),
+    alpha,
+  ];
+}
+
+/** Same ramp as a CSS color string (for the results list score chips). */
+export function scoreColorCss(score: number | null | undefined): string {
+  const [r, g, b] = scoreColor(score, 255);
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+/** Readable text color (near-black or white) for a score chip, by background luminance (WCAG). */
+export function scoreTextColor(score: number | null | undefined): string {
+  const [r, g, b] = scoreColor(score, 255);
+  const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  return luminance > 0.6 ? "#1a1a1a" : "#ffffff";
+}
 
 export interface LayerToggleState {
   visible: boolean;

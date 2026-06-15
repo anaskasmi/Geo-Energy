@@ -11,7 +11,9 @@
     "typecheck": "tsc -b"
   },
   "dependencies": {
+    "@deck.gl/mapbox": "^9.3.4",
     "@turf/area": "^7.3.5",
+    "deck.gl": "^9.3.4",
     "maplibre-gl": "^4.7.1",
     "pmtiles": "^4.1.0",
     "react": "^18.3.1",

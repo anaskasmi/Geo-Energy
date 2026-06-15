@@ -1,9 +1,10 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
+import type { GeoJsonGeometry, ScoreFeatureCollection, UseCase } from "../api/client";
 import type { BasemapId } from "../theme/basemap";
 import { MapContext } from "./MapContext";
-import type { DrawApi, DrawMode, MapStore, ParcelInfo } from "./MapContext";
+import type { DrawApi, DrawMode, MapStore, ParcelInfo, ScoreStatus } from "./MapContext";
 import { initialLayerState } from "./layers";
 import type { LayerStateMap } from "./layers";
 
@@ -18,6 +19,13 @@ export function MapProvider({ children }: { children: ReactNode }) {
   const [canRedo, setCanRedo] = useState(false);
   const [canDeleteSelection, setCanDeleteSelection] = useState(false);
   const drawApi = useRef<DrawApi | null>(null);
+
+  const [useCase, setUseCase] = useState<UseCase>("utility_solar");
+  const [drawnPolygon, setDrawnPolygon] = useState<GeoJsonGeometry | null>(null);
+  const [scoreResult, setScoreResult] = useState<ScoreFeatureCollection | null>(null);
+  const [scoreStatus, setScoreStatusState] = useState<ScoreStatus>("idle");
+  const [scoreError, setScoreError] = useState<string | null>(null);
+  const flyToApi = useRef<((lngLat: [number, number], zoom?: number) => void) | null>(null);
 
   const setLayerVisible = useCallback((id: string, visible: boolean) => {
     setLayers((prev) => ({ ...prev, [id]: { ...prev[id], visible } }));
@@ -36,6 +44,19 @@ export function MapProvider({ children }: { children: ReactNode }) {
   const redo = useCallback(() => drawApi.current?.redo(), []);
   const clearDraw = useCallback(() => drawApi.current?.clear(), []);
   const deleteSelection = useCallback(() => drawApi.current?.deleteSelected(), []);
+  const setScoreStatus = useCallback((status: ScoreStatus, error: string | null = null) => {
+    setScoreStatusState(status);
+    setScoreError(error);
+  }, []);
+  const registerFlyTo = useCallback(
+    (fly: ((lngLat: [number, number], zoom?: number) => void) | null) => {
+      flyToApi.current = fly;
+    },
+    [],
+  );
+  const flyTo = useCallback((lngLat: [number, number], zoom?: number) => {
+    flyToApi.current?.(lngLat, zoom);
+  }, []);
 
   const value = useMemo<MapStore>(
     () => ({
@@ -60,6 +81,17 @@ export function MapProvider({ children }: { children: ReactNode }) {
       redo,
       clearDraw,
       deleteSelection,
+      useCase,
+      setUseCase,
+      drawnPolygon,
+      setDrawnPolygon,
+      scoreResult,
+      setScoreResult,
+      scoreStatus,
+      scoreError,
+      setScoreStatus,
+      registerFlyTo,
+      flyTo,
     }),
     [
       basemap,
@@ -78,6 +110,14 @@ export function MapProvider({ children }: { children: ReactNode }) {
       redo,
       clearDraw,
       deleteSelection,
+      useCase,
+      drawnPolygon,
+      scoreResult,
+      scoreStatus,
+      scoreError,
+      setScoreStatus,
+      registerFlyTo,
+      flyTo,
     ],
   );
 

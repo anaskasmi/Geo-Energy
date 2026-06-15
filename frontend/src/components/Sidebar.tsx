@@ -1,6 +1,7 @@
 import { BasemapControl } from "./BasemapControl";
 import { LayerControl } from "./LayerControl";
 import { Legend } from "./Legend";
+import { ScoringControl } from "./ScoringControl";
 import { ThemeToggle } from "./ThemeToggle";
 
 /**
@@ -15,6 +16,11 @@ export function Sidebar() {
         <h1 className="sidebar__title">Site Selection</h1>
         <p className="sidebar__subtitle">Kern County, CA</p>
       </header>
+
+      <section className="panel-section">
+        <h2 className="panel-section__title">Scoring</h2>
+        <ScoringControl />
+      </section>
 
       <section className="panel-section">
         <h2 className="panel-section__title">Appearance</h2>
@@ -34,11 +40,6 @@ export function Sidebar() {
       <section className="panel-section">
         <h2 className="panel-section__title">Legend</h2>
         <Legend />
-      </section>
-
-      <section className="panel-section">
-        <h2 className="panel-section__title">Filters</h2>
-        <p className="placeholder-text">Scoring criteria and weights will appear here.</p>
       </section>
     </div>
   );
