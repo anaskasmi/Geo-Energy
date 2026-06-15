@@ -38,7 +38,15 @@ flag can never be forgotten.
 
 - **Distances**: meters (computed in 26911/3310, never in degrees).
 - **Areas**: square meters internally; expose acres/hectares at the API/UI boundary.
-- **Slope**: degrees or percent — compute from the DEM in a metric CRS (26911).
+- **Slope**: percent grade — computed from the DEM in the metric CRS (26911), never in
+  degrees (`slope = 100 · |∇z|` with `∇z` in metres/metre). Stored as a `slope.tif` raster
+  in 26911; a `slope_raster` metadata table in `site.duckdb` records each raster's
+  role/resolution/path/profile. **Two-resolution policy** (GEO-9): **30 m** is the broad,
+  county-wide *screening* pass (always emitted as `slope.tif`); **10 m** is the *final* pass
+  for re-evaluating top candidates — the candidate set is unknown at ingest, so the 10 m
+  raster is emitted only for an explicit AOI (`GEO_SLOPE_FINAL_AOI`, "west,south,east,north"
+  in 4326) and otherwise produced on demand by the same code path. Parcels steeper than
+  `SLOPE_MAX_PCT` (15%) are a Stage-A exclusion (applied in GEO-13 enrichment).
 - **Angles / coordinates as stored**: decimal degrees (4326).
 
 ## 3. Artifact layout (the `data:` volume)
@@ -53,8 +61,8 @@ through the `current/` path; never open a `releases/` path directly.
 │   └── <build_id>/     # one immutable directory per successful build
 │       ├── site.duckdb         # read-only DuckDB artifact (LOAD spatial)
 │       ├── *.pmtiles           # vector tiles (GEO-14+)
-│       ├── slope.tif           # DEM-derived slope raster (later)
-│       ├── ghi_grid.parquet    # NREL solar grid (later)
+│       ├── slope.tif           # 30 m DEM-derived slope raster, EPSG:26911 (GEO-9)
+│       ├── ghi_grid.parquet    # NREL solar GHI/DNI/lat-tilt grid, 4326 points (GEO-10)
 │       └── manifest.json       # build metadata (sources, versions, row counts)
 └── releases/<id>/_SUCCESS      # written last; absence ⇒ incomplete build
 ```

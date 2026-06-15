@@ -1,0 +1,15 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {"OBJECTID": 1, "Unit_Nm": "Test Preserve"},
+      "geometry": {"type": "Polygon", "coordinates": [[[-119.6, 35.1], [-119.4, 35.1], [-119.4, 35.3], [-119.6, 35.3], [-119.6, 35.1]]]}
+    },
+    {
+      "type": "Feature",
+      "properties": {"OBJECTID": 2, "Unit_Nm": "Test Wilderness"},
+      "geometry": {"type": "Polygon", "coordinates": [[[-118.8, 35.2], [-118.6, 35.2], [-118.6, 35.4], [-118.8, 35.4], [-118.8, 35.2]]]}
+    }
+  ]
+}

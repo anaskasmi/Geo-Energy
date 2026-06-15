@@ -9,6 +9,13 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
+# rasterio's wheel (GEO-9 slope) bundles GDAL/GEOS/PROJ but still dlopens libexpat at runtime,
+# which python:3.12-slim omits (import fails with "libexpat.so.1: cannot open shared object
+# file"). Install the minimal runtime lib so the slope fetcher can actually run in-container.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libexpat1 \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 

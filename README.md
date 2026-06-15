@@ -63,8 +63,14 @@ make ingest                   # run the one-shot ingestion job → data:/current
 make up                       # start api + web (SPA on http://localhost:8080)
 ```
 
-See [`Makefile`](Makefile) for all entrypoints (`build`, `ingest`, `frontend`, `up`,
-`down`, `logs`, `config`, `ps`).
+After `make ingest`, generate the parcel vector tiles (needs `tippecanoe` on PATH):
+
+```bash
+make tiles                    # parcels.geojson → parcels.pmtiles in data:/current (GEO-14)
+```
+
+See [`Makefile`](Makefile) for all entrypoints (`build`, `ingest`, `frontend`, `tiles`,
+`up`, `down`, `logs`, `config`, `ps`).
 
 ## Repository layout
 
@@ -82,6 +88,16 @@ geo-energy/
 
 ## Status
 
-This is the project scaffolding (GEO-1). `ingest/` carries the real ingestion harness
-(GEO-2). `api/`, `web/`, and `frontend/` contain **clearly-marked placeholder
-skeletons** that are fleshed out by their own tickets (GEO-15, GEO-34, GEO-22, GEO-33).
+- **`ingest/`** — real pipeline (GEO-2). Layers: county boundary (GEO-3), parcels (GEO-4),
+  zoning (GEO-5), HIFLD transmission/substations (GEO-6), CAISO queue + POI (GEO-7), FEMA
+  flood SFHA (GEO-8), **3DEP slope raster (GEO-9)**, **NREL solar GHI grid (GEO-10)**, and
+  **optional EIA-860 generators + Stage-A exclusion overlays (GEO-11)**. **Parcel PMTiles via
+  tippecanoe (GEO-14)** — `make tiles`. (US-gov sources — 3DEP/NREL/EIA, like FEMA/CAISO —
+  geo-block non-US IPs; live ingest of those needs a US egress. Offline runs use pre-staged
+  `GEO_*_SOURCE` files; the test suite is fully hermetic.)
+- **`api/`** — real FastAPI skeleton (GEO-15): opens `data:/current/site.duckdb` read-only at
+  startup, per-request cursor, `run_in_threadpool`, `GET /api/health`. Scoring/agent are GEO-16+.
+- **`frontend/`** — real React + Vite + MapLibre SPA scaffold (GEO-22): PMTiles parcels layer,
+  responsive 3-pane/​bottom-sheet shell, light/dark theming. Score rendering (deck.gl) is GEO-24.
+- **`web/`** — still a placeholder nginx skeleton; production proxy + `.pmtiles` byte-range
+  serving is GEO-34. Production Dockerfiles/hardening are GEO-33.

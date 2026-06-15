@@ -10,5 +10,14 @@ httpx>=0.27,<0.29
 # this nor the network. Pulls pandas. Loose pin here; full pinning/lockfile is GEO-33.
 gridstatus>=0.30
 
+# Slope / DEM raster (GEO-9). rasterio (+ numpy) compute slope from the DEM and write the
+# slope.tif sidecar — needed on BOTH the live and offline (pre-staged DEM) paths, so they are
+# real deps (this is the one fetcher that does raster work; DuckDB spatial is vector-only).
+# seamless-3dep fetches USGS 3DEP DEM tiles and is imported lazily on the live path only
+# (offline/test path uses GEO_DEM_SOURCE). Loose pins here; full pinning/lockfile is GEO-33.
+rasterio>=1.3,<2
+numpy>=1.26
+seamless-3dep>=0.2
+
 # Dev/test (kept in-image so `make test` can run pytest inside the container).
 pytest>=8,<9

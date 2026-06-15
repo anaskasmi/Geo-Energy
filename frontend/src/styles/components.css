@@ -1,0 +1,198 @@
+/* ── Responsive shell ──────────────────────────────────────────────────────────
+ * Desktop: 3-pane CSS grid (left controls / center map / right results).
+ * Mobile : full-screen map + draggable bottom sheet + floating toolbar.
+ * Breakpoint ~768px (driven by useIsDesktop / matchMedia in JS).
+ */
+.shell {
+  height: 100%;
+  width: 100%;
+}
+
+.shell--desktop {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr) 360px;
+  grid-template-rows: 100%;
+}
+
+.shell--mobile {
+  position: relative;
+  overflow: hidden;
+}
+
+.pane {
+  min-height: 0;
+  min-width: 0;
+}
+
+.pane--left,
+.pane--right {
+  background: var(--bg-elevated);
+  overflow-y: auto;
+}
+.pane--left {
+  border-right: 1px solid var(--border);
+}
+.pane--right {
+  border-left: 1px solid var(--border);
+}
+
+/* The map pane is the positioning context for the absolutely-filled .map-view. */
+.pane--map {
+  position: relative;
+}
+.shell--mobile .pane--map {
+  position: absolute;
+  inset: 0;
+}
+
+/* ── Panel sections (shared by sidebar + results) ─────────────────────────────── */
+.panel-section {
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.panel-section__title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+  margin-bottom: 10px;
+}
+
+.placeholder-text {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+/* ── Sidebar ──────────────────────────────────────────────────────────────────── */
+.sidebar__header {
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.sidebar__title {
+  font-size: 18px;
+  font-weight: 700;
+}
+.sidebar__subtitle {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+/* ── Theme toggle ─────────────────────────────────────────────────────────────── */
+.theme-toggle {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--bg-sunken);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.theme-toggle__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+.theme-toggle__btn[aria-pressed="true"] {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+.theme-toggle__label {
+  font-size: 12px;
+}
+
+/* ── Results panel ────────────────────────────────────────────────────────────── */
+.results-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.results-list__item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  background: var(--bg-sunken);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.skeleton {
+  display: block;
+  height: 10px;
+  border-radius: 4px;
+  background: var(--skeleton);
+}
+.skeleton--line {
+  width: 100%;
+}
+.skeleton--short {
+  width: 55%;
+}
+
+/* ── Floating toolbar (mobile) ────────────────────────────────────────────────── */
+.floating-toolbar {
+  position: absolute;
+  top: calc(12px + env(safe-area-inset-top, 0px));
+  left: 12px;
+  z-index: 5;
+  padding: 4px;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+}
+
+/* ── Bottom sheet (mobile) ────────────────────────────────────────────────────── */
+.bottom-sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-elevated);
+  border-top: 1px solid var(--border);
+  border-radius: 16px 16px 0 0;
+  box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.18);
+  transition: height 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  touch-action: none;
+}
+.bottom-sheet[data-dragging] {
+  transition: none;
+}
+.bottom-sheet__handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  flex: 0 0 auto;
+  cursor: grab;
+  touch-action: none;
+}
+.bottom-sheet__handle:active {
+  cursor: grabbing;
+}
+.bottom-sheet__grip {
+  width: 40px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--border-strong);
+}
+.bottom-sheet__content {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}

@@ -1,3 +1,10 @@
-# PLACEHOLDER (GEO-1). Real, pinned dependency set lands with the FastAPI skeleton (GEO-15).
-fastapi
-uvicorn[standard]
+# API (Service B) dependencies — FastAPI skeleton (GEO-15).
+# duckdb is pinned to the SAME version as ingest (spatial extension ABI compatibility
+# against the artifact ingest builds). Fuller pinning/lockfile is GEO-33.
+duckdb==1.1.3
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+
+# Dev/test (kept in-image so tests can run pytest; httpx backs fastapi's TestClient).
+pytest>=8,<9
+httpx>=0.27,<0.29

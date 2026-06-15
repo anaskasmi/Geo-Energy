@@ -14,9 +14,13 @@ import pytest
 
 from pipeline import config, harness
 from pipeline.fetchers import base
-from tests.conftest import FIXTURES, make_settings
+from tests.conftest import FIXTURES, make_settings, write_dem_geotiff
 
 duckdb = pytest.importorskip("duckdb")
+# The slope fetcher (GEO-9) is auto-discovered and runs in the full build, so the e2e test
+# needs the raster stack (rasterio/numpy). It is a declared ingest dependency; skip cleanly
+# where it is absent rather than hard-error on the whole build.
+pytest.importorskip("rasterio")
 
 
 @pytest.fixture(autouse=True)
@@ -26,7 +30,7 @@ def _clean_registry():
     base.clear_registry()
 
 
-def _stage_all_sources(monkeypatch):
+def _stage_all_sources(monkeypatch, tmp_path):
     monkeypatch.setenv(config.COUNTY_SOURCE_ENV, str(FIXTURES / "kern_county.geojson"))
     monkeypatch.setenv(config.PARCELS_SOURCE_ENV, str(FIXTURES / "parcels_sample.geojson"))
     monkeypatch.setenv(config.TRANSMISSION_SOURCE_ENV, str(FIXTURES / "transmission_sample.geojson"))
@@ -36,10 +40,24 @@ def _stage_all_sources(monkeypatch):
     monkeypatch.setenv(config.GENERAL_PLAN_SOURCE_ENV, str(FIXTURES / "general_plan_sample.geojson"))
     monkeypatch.setenv(config.SPECIFIC_PLANS_SOURCE_ENV, str(FIXTURES / "specific_plans_sample.geojson"))
     monkeypatch.setenv(config.CAISO_QUEUE_SOURCE_ENV, str(FIXTURES / "caiso_queue_sample.csv"))
+    monkeypatch.setenv(config.NREL_GHI_SOURCE_ENV, str(FIXTURES / "ghi_grid_sample.csv"))
+    # Supplemental optional layers (GEO-11): EIA generators + a protected-area exclusion.
+    monkeypatch.setenv(config.EIA860_SOURCE_ENV, str(FIXTURES / "eia860_sample.csv"))
+    monkeypatch.setenv(
+        config.EXCLUSION_LAYERS[0][1], str(FIXTURES / "exclusion_protected_sample.geojson")
+    )
+    # Slope (GEO-9): a tiny DEM covering the county fixture, computed on a coarse grid so the
+    # e2e build stays fast (no checked-in binary; *.tif is gitignored).
+    dem = write_dem_geotiff(
+        tmp_path / "dem_source.tif", west=-120.1, south=34.8, east=-117.9, north=35.7,
+        width=150, height=75,
+    )
+    monkeypatch.setenv(config.DEM_SOURCE_ENV, str(dem))
+    monkeypatch.setenv(config.DEM_RES_ENV, "2000")
 
 
 def test_full_build_with_all_layers(tmp_path, monkeypatch):
-    _stage_all_sources(monkeypatch)
+    _stage_all_sources(monkeypatch, tmp_path)
 
     cfg = make_settings(tmp_path)
     out = harness.run(cfg, build_id="20260101T000000_000100Z")
@@ -52,7 +70,8 @@ def test_full_build_with_all_layers(tmp_path, monkeypatch):
             "county_boundary": 1, "parcels": 4, "transmission_lines": 4,
             "substations": 3, "flood_sfha": 4, "zoning": 6, "general_plan": 2,
             "specific_plans": 2, "caiso_queue": 5, "poi_competition": 1,
-            "caiso_queue_summary": 8,
+            "caiso_queue_summary": 8, "slope_raster": 1, "ghi_grid": 4,
+            "eia_generators": 3, "exclusions": 2,
         }
         for table, expected in counts.items():
             assert con.execute(f"SELECT count(*) FROM {table}").fetchone()[0] == expected, table
@@ -86,6 +105,7 @@ def test_full_build_with_all_layers(tmp_path, monkeypatch):
         "county_boundary", "parcels", "transmission_lines", "substations", "flood_sfha",
         "zoning", "general_plan", "specific_plans",
         "caiso_queue", "poi_competition", "caiso_queue_summary",
+        "slope", "ghi_grid", "eia_generators", "exclusions",
     ]  # run_order
 
     # Intermediates + tippecanoe input + zoning_rules.csv + success marker all present.
@@ -94,6 +114,9 @@ def test_full_build_with_all_layers(tmp_path, monkeypatch):
         "transmission_lines.parquet", "substations.parquet", "flood_sfha.parquet",
         "zoning.parquet", "general_plan.parquet", "specific_plans.parquet",
         "caiso_queue.parquet", "poi_competition.parquet", "caiso_queue_summary.parquet",
+        config.SLOPE_SCREENING_TIF,  # slope.tif raster sidecar (GEO-9)
+        config.GHI_GRID_PARQUET,     # ghi_grid.parquet (GEO-10)
+        config.EIA_GENERATORS_PARQUET, config.EXCLUSIONS_PARQUET,  # GEO-11 optional layers
         config.ZONING_RULES_CSV, config.SUCCESS_MARKER,
     ):
         assert (release / artifact).exists(), artifact

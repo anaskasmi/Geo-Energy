@@ -1,0 +1,5 @@
+plant_id,name,capacity_mw,fuel,status,county,lon,lat
+55001,Kern Solar A,120.5,Solar Photovoltaic,Operating,Kern,-119.4,35.2
+55002,Mojave Wind,200,Onshore Wind Turbine,Operating,Kern,-118.6,35.1
+55003,Bakersfield Storage,50,Batteries,Planned,Kern,-119.0,35.4
+99999,Outside Plant,300,Natural Gas,Operating,Los Angeles,-117.0,34.0

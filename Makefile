@@ -8,7 +8,7 @@ COMPOSE ?= docker compose
 ALL_PROFILES ?= --profile ingest --profile build
 
 .DEFAULT_GOAL := help
-.PHONY: help build ingest frontend up down restart logs ps config clean test fmt
+.PHONY: help build ingest frontend tiles up down restart logs ps config clean test fmt
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -22,6 +22,9 @@ ingest: ## Run the one-shot ingestion job (fetch → clean → reproject → bui
 
 frontend: ## Build the SPA into the web_dist volume
 	$(COMPOSE) run --rm frontend
+
+tiles: ## Generate parcels.pmtiles from the current release (GEO-14; needs tippecanoe on PATH, honors DATA_DIR)
+	cd ingest && python3 -m pipeline.tiles
 
 up: ## Start api + web (SPA on http://localhost:8080)
 	$(COMPOSE) up -d api web

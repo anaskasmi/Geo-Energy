@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Site-Selection App</title>
+    <script>
+      // Apply the persisted / system theme before first paint to avoid a flash of the
+      // wrong theme. Mirrors the logic in src/theme/ThemeProvider.tsx.
+      (function () {
+        try {
+          var stored = localStorage.getItem("geo-energy-theme");
+          var pref = stored === "light" || stored === "dark" || stored === "system" ? stored : "system";
+          var systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+          var resolved = pref === "system" ? (systemDark ? "dark" : "light") : pref;
+          document.documentElement.setAttribute("data-theme", resolved);
+          document.documentElement.style.colorScheme = resolved;
+        } catch (e) {
+          document.documentElement.setAttribute("data-theme", "light");
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

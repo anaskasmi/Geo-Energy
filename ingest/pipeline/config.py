@@ -210,6 +210,125 @@ POI_COMPETITION_RADIUS_M = 10_000.0
 # Exact matches are always allowed regardless of length.
 POI_MATCH_MIN_TOKEN_LEN = 4
 
+# ── Slope / terrain (GEO-9, USGS 3DEP DEM → slope raster) ──────────────────────
+# DEM → slope (percent grade) raster. The DEM is acquired over the county bbox via the
+# `seamless-3dep` package (`get_dem(bbox, save_dir, res=10|30|60)` → GeoTIFF tiles in
+# EPSG:4326; lazy-imported only on the live path, like gridstatus). It is then reprojected
+# to the metric CRS (EPSG:26911) and slope is computed THERE (CONVENTIONS §2: slope is a
+# metric quantity — compute from the DEM in 26911, never in degrees), clipped to the county
+# polygon, and written as a single-band float32 GeoTIFF sidecar in the release dir. A small
+# `slope_raster` metadata table (one row per emitted raster: role/resolution/path/profile)
+# is created in the artifact so the manifest/reader contract (one table per fetcher) holds
+# and GEO-13 enrichment can locate the raster to sample per-parcel zonal slope.
+#
+# Two-resolution policy (review C11): 30 m is the broad SCREENING pass (county-wide,
+# always emitted as slope.tif). 10 m is the FINAL pass used to re-evaluate top candidates;
+# the candidate set is not known at ingest time, so the 10 m raster is emitted ONLY for an
+# explicit area-of-interest supplied via GEO_SLOPE_FINAL_AOI ("west,south,east,north" in
+# 4326) — otherwise the same code path is reused later (enrichment/scoring) per candidate.
+#
+# Live 3DEP fetch is a US-gov source and geo-blocks non-US IPs (see the substations/flood
+# notes); validate the live path from a US egress. The offline/test path reads a pre-staged
+# DEM GeoTIFF from GEO_DEM_SOURCE (no network, no seamless-3dep needed).
+DEM_SOURCE_ENV = "GEO_DEM_SOURCE"            # pre-staged DEM GeoTIFF (CRS read from the file)
+DEM_SOURCE_CRS_ENV = "GEO_DEM_SOURCE_CRS"    # override CRS when the staged DEM lacks one
+DEM_RES_ENV = "GEO_DEM_RES_M"                # override the live 3DEP fetch resolution (10/30/60)
+SLOPE_FINAL_AOI_ENV = "GEO_SLOPE_FINAL_AOI"  # "west,south,east,north" (4326) → also emit 10 m final
+SLOPE_SCREENING_RES_M = 30                   # broad screening pass (county-wide slope.tif)
+SLOPE_FINAL_RES_M = 10                       # final candidate re-evaluation pass
+SLOPE_METRIC_CRS = CRS_METRIC_UTM            # compute & store slope in EPSG:26911 (meters)
+SLOPE_NODATA = -9999.0                       # GeoTIFF nodata for masked / off-county cells
+# Stage-A exclusion threshold (percent grade): parcels steeper than this are excluded in
+# enrichment (GEO-13). Defined here so the slope artifact and the scorer agree on one value.
+SLOPE_MAX_PCT = 15.0
+SLOPE_SCREENING_TIF = "slope.tif"            # canonical county-wide screening raster
+SLOPE_FINAL_TIF = "slope_final.tif"          # 10 m final-pass raster (when an AOI is given)
+SLOPE_TABLE = "slope_raster"                 # metadata table (one row per emitted raster)
+
+# ── Solar resource (GEO-10, NREL Solar Resource API → GHI grid) ────────────────
+# NREL "Solar Resource Data" v1 (developer.nrel.gov/api/solar/solar_resource/v1.json):
+# per lat/lon it returns annual + monthly avg_ghi (kWh/m²/day), avg_dni and avg_lat_tilt.
+# We sample a regular grid over the county bbox (clipped to the polygon), query each point
+# (throttled to the 1,000 req/hr key limit, on-disk cached so re-runs don't re-query), and
+# persist a `ghi_grid` points table + ghi_grid.parquet. GHI is sampled PER PARCEL from this
+# grid in enrichment (GEO-13) — never queried per parcel (review C10). The API key is
+# Settings.nrel_api_key (env NREL_API_KEY), the project's one secret (kept out of repr/logs).
+# A pre-staged CSV (lon,lat,avg_ghi,avg_dni,avg_lat_tilt; 4326) via GEO_NREL_GHI_SOURCE feeds
+# the offline/test path. Live NREL is a US-gov host that may geo-block non-US IPs — validate
+# from a US egress. The HTTP client lives in pipeline/nrel.py with an injectable transport.
+NREL_SOLAR_RESOURCE_URL = "https://developer.nrel.gov/api/solar/solar_resource/v1.json"
+NREL_GHI_URL_ENV = "GEO_NREL_GHI_URL"
+NREL_GHI_SOURCE_ENV = "GEO_NREL_GHI_SOURCE"   # pre-staged CSV (lon,lat,avg_ghi,avg_dni,avg_lat_tilt)
+NREL_GHI_CACHE_ENV = "GEO_NREL_CACHE_DIR"     # response cache dir (default <data_dir>/.cache/nrel)
+NREL_GHI_GRID_SPACING_DEG = 0.1               # ~11 km sample spacing over the county bbox
+NREL_RATE_PER_HOUR = 1000                     # API key limit; throttle live calls to stay under it
+# CSV column candidates (resolved case-insensitively, first match wins).
+NREL_GHI_FIELDS = ("avg_ghi", "ghi", "annual_ghi")
+NREL_DNI_FIELDS = ("avg_dni", "dni", "annual_dni")
+NREL_LAT_TILT_FIELDS = ("avg_lat_tilt", "lat_tilt", "annual_lat_tilt")
+NREL_LON_FIELDS = ("lon", "longitude", "x")
+NREL_LAT_FIELDS = ("lat", "latitude", "y")
+GHI_GRID_TABLE = "ghi_grid"
+GHI_GRID_PARQUET = "ghi_grid.parquet"
+
+# ── Supplemental / optional layers (GEO-11) ────────────────────────────────────
+# OPTIONAL and explicitly OFF the critical path (review C8): these fetchers NEVER fail the
+# build when their source is unconfigured — they create an empty table (logged at WARNING)
+# instead of raising, so the core pipeline (and artifact assembly, which does not depend on
+# them) is unaffected. Two concerns:
+#  (1) EIA-860/860M generators (plant lat/lon, capacity, fuel/tech, status) — a points layer
+#      for cross-checking the CAISO queue. Tabular source → pre-staged CSV via
+#      GEO_EIA860_SOURCE (lon/lat/…); a CSV-mirror URL can be set via GEO_EIA860_URL. The
+#      live EIA-860 download (a zip of spreadsheets) is deferred — default URL is empty.
+#  (2) Exclusion overlay polygons (protected areas / open water / built-up) so the §5 Stage-A
+#      OPTIONAL exclusions become implementable. Unioned into one `exclusions` table with a
+#      `kind` column; each kind ingests only when its GEO_EXCLUSION_<KIND>_SOURCE (or _URL) is
+#      configured. Real national sources (PAD-US, NHD, NLCD) are large and their endpoints are
+#      deferred, so default URLs are empty — stage a clipped GeoJSON to enable a kind.
+# Spatial-join flags (parcel × exclusion, generator cross-checks) are computed in enrichment
+# (GEO-13); scoring wires the optional exclusions behind a flag.
+EIA860_SOURCE_ENV = "GEO_EIA860_SOURCE"      # pre-staged CSV (lon,lat,capacity,fuel,status,…)
+EIA860_URL_ENV = "GEO_EIA860_URL"            # optional CSV-mirror URL (live zip download deferred)
+EIA860_URL = ""                              # deferred (no default live endpoint)
+EIA860_PLANT_ID_FIELDS = ("Plant Code", "plant_id", "Plant ID", "plant_code", "EIA_ID")
+EIA860_NAME_FIELDS = ("Plant Name", "plant_name", "name")
+EIA860_CAPACITY_FIELDS = ("Nameplate Capacity (MW)", "capacity_mw", "nameplate_mw", "MW")
+EIA860_FUEL_FIELDS = ("Technology", "technology", "Energy Source 1", "prime_mover", "fuel")
+EIA860_STATUS_FIELDS = ("Status", "status", "operating_status")
+EIA860_COUNTY_FIELDS = ("County", "county")
+EIA860_LON_FIELDS = ("lon", "longitude", "Longitude", "x")
+EIA860_LAT_FIELDS = ("lat", "latitude", "Latitude", "y")
+EIA_GENERATORS_TABLE = "eia_generators"
+EIA_GENERATORS_PARQUET = "eia_generators.parquet"
+# Exclusion overlay layers: (kind, SOURCE env, SOURCE_CRS env, URL env, default URL).
+EXCLUSION_LAYERS = (
+    ("protected_area", "GEO_EXCLUSION_PROTECTED_SOURCE", "GEO_EXCLUSION_PROTECTED_SOURCE_CRS",
+     "GEO_EXCLUSION_PROTECTED_URL", ""),
+    ("open_water", "GEO_EXCLUSION_WATER_SOURCE", "GEO_EXCLUSION_WATER_SOURCE_CRS",
+     "GEO_EXCLUSION_WATER_URL", ""),
+    ("built_up", "GEO_EXCLUSION_BUILTUP_SOURCE", "GEO_EXCLUSION_BUILTUP_SOURCE_CRS",
+     "GEO_EXCLUSION_BUILTUP_URL", ""),
+)
+EXCLUSION_NAME_FIELDS = ("name", "NAME", "Unit_Nm", "GAP_Sts", "GNIS_NAME", "label", "TYPE")
+EXCLUSION_ID_FIELDS = ("id", "OBJECTID", "FID", "OBJECTID_1", "GFID", "Source_PAID")
+EXCLUSIONS_TABLE = "exclusions"
+EXCLUSIONS_PARQUET = "exclusions.parquet"
+
+# ── Parcel vector tiles (GEO-14, tippecanoe → parcels.pmtiles) ─────────────────
+# The parcels fetcher (GEO-4) emits parcels.geojson (4326) into the release dir; this step
+# tiles it into parcels.pmtiles for the SPA (served later via HTTP byte-range by nginx,
+# GEO-34). Independent of the DuckDB builder (only needs parcels) so it can run in parallel.
+# tippecanoe is a native binary (not a pip dep) — resolved on PATH or via GEO_TIPPECANOE_BIN.
+# See pipeline/tiles.py (`python -m pipeline.tiles`, `make tiles`).
+PARCELS_GEOJSON_NAME = "parcels.geojson"     # produced by the parcels fetcher (GEO-4)
+PARCELS_PMTILES_NAME = "parcels.pmtiles"
+PARCELS_TILE_LAYER = "parcels"               # vector source-layer name (the SPA references this)
+PARCELS_TILE_MINZOOM = 8                      # parcels visible from county-overview zoom
+PARCELS_TILE_MAXZOOM = 16                     # full detail
+PARCELS_TILE_SIMPLIFICATION = 10             # Douglas-Peucker tolerance below max zoom (zoom-based)
+PARCELS_TILE_ATTRS = ("id", "apn", "acres")  # base attributes carried into the tiles
+TIPPECANOE_BIN_ENV = "GEO_TIPPECANOE_BIN"    # override the tippecanoe executable path
+
 
 @dataclass(frozen=True)
 class Settings:

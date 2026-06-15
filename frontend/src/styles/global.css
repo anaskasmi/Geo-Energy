@@ -1,0 +1,106 @@
+/* ── Theme variables ─────────────────────────────────────────────────────────
+ * Driven by the `data-theme` attribute on <html> (set by ThemeProvider / the inline
+ * pre-paint script in index.html). Light is the default; [data-theme="dark"] overrides.
+ */
+:root,
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --bg: #f4f5f7;
+  --bg-elevated: #ffffff;
+  --bg-sunken: #ebedf0;
+  --surface: #ffffff;
+  --border: #d9dce1;
+  --border-strong: #c2c7cf;
+
+  --text: #1b1f24;
+  --text-muted: #5b6370;
+  --text-faint: #8a929e;
+
+  --accent: #2563eb;
+  --accent-contrast: #ffffff;
+
+  --shadow: 0 1px 2px rgba(16, 24, 40, 0.06), 0 4px 12px rgba(16, 24, 40, 0.08);
+  --skeleton: #e3e6ea;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg: #0f1115;
+  --bg-elevated: #1a1d23;
+  --bg-sunken: #14171c;
+  --surface: #1a1d23;
+  --border: #2a2f37;
+  --border-strong: #3a414b;
+
+  --text: #e8eaed;
+  --text-muted: #a4adba;
+  --text-faint: #6b7480;
+
+  --accent: #4f8cff;
+  --accent-contrast: #0f1115;
+
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 6px 16px rgba(0, 0, 0, 0.45);
+  --skeleton: #262a31;
+}
+
+/* ── Reset / base ────────────────────────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+/* ── Map ─────────────────────────────────────────────────────────────────────── */
+.map-view {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* Theme the MapLibre control chrome to match the app surfaces. */
+.maplibregl-ctrl-group {
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.maplibregl-ctrl-group button + button {
+  border-top-color: var(--border);
+}
+.maplibregl-ctrl-attrib {
+  background: color-mix(in srgb, var(--surface) 80%, transparent);
+  color: var(--text-muted);
+}
+.maplibregl-ctrl-attrib a {
+  color: var(--text-muted);
+}

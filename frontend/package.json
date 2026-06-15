@@ -2,9 +2,25 @@
   "name": "geo-energy-frontend",
   "version": "0.0.0",
   "private": true,
-  "description": "PLACEHOLDER (GEO-1). Real React + Vite + MapLibre SPA is scaffolded in GEO-22.",
+  "description": "React + Vite + MapLibre SPA for the Site-Selection App (GEO-22 scaffold).",
   "type": "module",
   "scripts": {
-    "build": "node scripts/build-placeholder.mjs"
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -b"
+  },
+  "dependencies": {
+    "maplibre-gl": "^4.7.1",
+    "pmtiles": "^4.1.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.6.3",
+    "vite": "^6.0.3"
   }
 }
