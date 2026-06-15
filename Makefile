@@ -8,7 +8,8 @@ COMPOSE ?= docker compose
 ALL_PROFILES ?= --profile ingest --profile build
 
 .DEFAULT_GOAL := help
-.PHONY: help build ingest frontend tiles up down restart logs ps config clean test fmt
+.PHONY: help build ingest frontend tiles up down restart logs ps config clean test fmt \
+        ci verify check-build tls-config tls-up
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -48,3 +49,17 @@ test: ## Run the ingest test suite inside the ingest image
 
 clean: ## Remove containers AND the data/web_dist volumes (DESTRUCTIVE — rebuilds artifact)
 	$(COMPOSE) down -v
+
+ci: build test ## Local CI mirror (GEO-38): build all images + ingest tests. Full API/frontend matrix runs in GitHub Actions.
+
+verify: ## Assert every service image runs as a non-root user (GEO-36)
+	./deploy/verify-nonroot.sh
+
+check-build: ## Show ingest build.success / build.failed events from the logs (GEO-37)
+	./deploy/check-build.sh
+
+tls-config: ## Validate the optional Caddy TLS edge merge (GEO-36)
+	$(COMPOSE) -f docker-compose.yml -f docker-compose.tls.yml config
+
+tls-up: ## Start the stack WITH the Caddy TLS edge (set SITE_ADDRESS + ACME_EMAIL first; GEO-36)
+	$(COMPOSE) -f docker-compose.yml -f docker-compose.tls.yml up -d

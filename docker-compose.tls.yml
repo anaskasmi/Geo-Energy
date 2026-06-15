@@ -1,0 +1,54 @@
+# GEO-36 — OPTIONAL TLS edge override. Adds a Caddy reverse proxy in front of `web`, giving
+# automatic HTTPS (ACME / Let's Encrypt), an automatic HTTP→HTTPS redirect, HTTP/2 + HTTP/3,
+# and HSTS — the fewest-moving-parts auto-renewing TLS option (no certbot cron, no renewal
+# hooks, certs persist in the caddy_data volume). See docs/GEO-36-host-security.md.
+#
+# Enable it by layering this file on top of the base compose:
+#   SITE_ADDRESS=sites.example.com ACME_EMAIL=ops@example.com \
+#     docker compose -f docker-compose.yml -f docker-compose.tls.yml up -d
+# Validate the merge first:
+#   docker compose -f docker-compose.yml -f docker-compose.tls.yml config
+#
+# For a real cert SITE_ADDRESS must be a public DNS name resolving to this host with 80/443
+# reachable. Leave it as the default `localhost` (or use `https://<ip>`) and Caddy issues a
+# local self-signed cert — handy for a smoke test without public DNS.
+
+services:
+  caddy:
+    image: caddy:2.8-alpine
+    restart: unless-stopped
+    depends_on:
+      web:
+        condition: service_healthy   # web's HEALTHCHECK (/healthz) gates the edge start
+    ports:
+      - "80:80"                       # ACME HTTP-01 challenge + 80→443 redirect
+      - "443:443"                     # HTTPS (HTTP/1.1 + HTTP/2)
+      - "443:443/udp"                 # HTTP/3 (QUIC)
+    environment:
+      # Site address Caddy serves + auto-provisions a cert for. A bare hostname triggers ACME;
+      # `localhost` / an IP gets Caddy's local CA (self-signed) instead.
+      SITE_ADDRESS: ${SITE_ADDRESS:-localhost}
+      # ACME account email (recommended for expiry notices). Blank is allowed.
+      ACME_EMAIL: ${ACME_EMAIL:-}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data              # issued certs + ACME account — MUST persist across restarts
+      - caddy_config:/config
+    mem_limit: 256m
+    cpus: 1
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  web:
+    # The edge is the only public entry point now: stop publishing web on the host so :8080
+    # cannot be reached directly (which would bypass TLS, HSTS, and the real-client-IP trust).
+    # `!reset` clears the base file's port mapping (Compose ≥ 2.24). web stays reachable to
+    # Caddy over the compose network as `web:8080`.
+    ports: !reset []
+
+volumes:
+  caddy_data:
+  caddy_config:

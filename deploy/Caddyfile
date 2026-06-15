@@ -1,0 +1,45 @@
+# GEO-36 — Caddy TLS edge for the Site-Selection App. Terminates HTTPS in front of the `web`
+# nginx service (docker-compose.tls.yml). Caddy auto-provisions + auto-renews certificates,
+# auto-redirects HTTP→HTTPS, and speaks HTTP/2 + HTTP/3 with no extra config. SITE_ADDRESS /
+# ACME_EMAIL are injected from the environment (compose).
+#
+# Why Caddy over certbot+nginx (decision in docs/GEO-36-host-security.md): certbot needs a
+# renewal timer, a webroot/ACME volume shared with nginx, and a reload hook; Caddy folds cert
+# issuance, renewal, OCSP stapling, and the redirect into the server itself — fewest moving
+# parts, nothing to forget to renew.
+{
+	# ACME account email (optional; enables expiry notices). Empty value is tolerated.
+	email {$ACME_EMAIL}
+	# To exercise the full ACME flow without burning rate limits, uncomment the staging CA:
+	# acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
+}
+
+{$SITE_ADDRESS} {
+	# Compress text responses at the edge (pmtiles/images are already compressed/range-served
+	# and Caddy won't gzip them by content-type).
+	encode gzip zstd
+
+	# HSTS — set ONLY here, where TLS actually terminates (2 years, subdomains, preload-ready).
+	# The app security headers (CSP, X-Content-Type-Options, Referrer-Policy, X-Frame-Options)
+	# come from web/nginx.conf and pass through unchanged; we don't duplicate them here.
+	header {
+		Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+		-Server
+	}
+
+	# SSE agent stream (GEO-21): flush every write immediately (no edge buffering) and allow a
+	# long generation. `flush_interval -1` disables response buffering so tokens stream live.
+	@agent path /api/agent /api/agent/*
+	reverse_proxy @agent web:8080 {
+		flush_interval -1
+		transport http {
+			read_timeout 360s
+			write_timeout 360s
+			response_header_timeout 300s
+		}
+	}
+
+	# Everything else → the nginx web service (SPA, /api, *.pmtiles). Caddy forwards the real
+	# client IP in X-Forwarded-For, which nginx maps back via set_real_ip_from (GEO-37).
+	reverse_proxy web:8080
+}

@@ -70,7 +70,43 @@ make tiles                    # parcels.geojson → parcels.pmtiles in data:/cur
 ```
 
 See [`Makefile`](Makefile) for all entrypoints (`build`, `ingest`, `frontend`, `tiles`,
-`up`, `down`, `logs`, `config`, `ps`).
+`up`, `down`, `logs`, `config`, `ps`, plus the deploy helpers below).
+
+## Production deployment, security & CI/CD
+
+The base stack serves plain HTTP on `:8080`. For production, layer the **optional TLS edge** and
+apply the **host hardening** scripts; CI/CD lives in GitHub Actions. Full decisions:
+[`docs/GEO-36-host-security.md`](docs/GEO-36-host-security.md),
+[`docs/GEO-37-runtime-protection.md`](docs/GEO-37-runtime-protection.md),
+[`docs/GEO-38-cicd-cdn.md`](docs/GEO-38-cicd-cdn.md).
+
+```bash
+# TLS edge (Caddy: auto-HTTPS, auto-renew, HSTS, HTTP→HTTPS redirect). web:8080 is no longer
+# published — Caddy is the only public entrypoint. Validate the merge, then bring it up:
+make tls-config
+SITE_ADDRESS=sites.example.com ACME_EMAIL=ops@example.com make tls-up
+
+# Host hardening (Debian/Ubuntu, as root) — firewall, SSH, automatic security updates:
+sudo SSH_ALLOW_FROM=203.0.113.0/24 ./deploy/firewall.sh
+sudo install -m 0644 deploy/sshd_hardening.conf /etc/ssh/sshd_config.d/10-geo-hardening.conf && sudo sshd -t && sudo systemctl reload ssh
+sudo ./deploy/setup-unattended-upgrades.sh
+
+make verify        # assert all containers run non-root (api 10002, web 101, ingest 10001, frontend 10003)
+make check-build   # show ingest build.success / build.failed events
+make ci            # local CI mirror: build all images + ingest tests
+```
+
+- **Runtime protection (GEO-37):** per-IP rate + connection limits in `web/nginx.conf` — `/api/`
+  (10 r/s, burst 20) and a much stricter `/api/agent` (1 r/s, burst 3, max 2 concurrent SSE streams)
+  to protect the metered LLM key — plus a `client_max_body_size` cap, a latency access log, and
+  rotated json-file container logs.
+- **Security headers (GEO-36):** CSP tuned for MapLibre + deck.gl, `nosniff`, `Referrer-Policy`,
+  `X-Frame-Options` (in nginx); HSTS only at the TLS edge. Secrets stay in `.env` (git-ignored,
+  never baked into an image) and, for CI, in GitHub Actions / a `production` environment.
+- **CI/CD (GEO-38):** [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs API tests +
+  frontend build + a docker build-proof on every push/PR; [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml)
+  builds+pushes images to GHCR and SSH-rolls the host, **gated** behind a `production` environment.
+  A CDN for `/assets` + `.pmtiles` (never `/api`) is documented in the GEO-38 doc.
 
 ## Repository layout
 
@@ -99,5 +135,6 @@ geo-energy/
   startup, per-request cursor, `run_in_threadpool`, `GET /api/health`. Scoring/agent are GEO-16+.
 - **`frontend/`** — real React + Vite + MapLibre SPA scaffold (GEO-22): PMTiles parcels layer,
   responsive 3-pane/​bottom-sheet shell, light/dark theming. Score rendering (deck.gl) is GEO-24.
-- **`web/`** — still a placeholder nginx skeleton; production proxy + `.pmtiles` byte-range
-  serving is GEO-34. Production Dockerfiles/hardening are GEO-33.
+- **`web/`** — production nginx (GEO-34): SPA host, `/api` reverse proxy, `.pmtiles` byte-range
+  serving. Hardened in GEO-33 (non-root image) and GEO-36/37 (security headers, per-IP rate +
+  connection limits, payload cap, latency access log). Optional Caddy TLS edge in GEO-36.

@@ -52,6 +52,20 @@ services:
       DUCKDB_MEMORY_LIMIT: "768MB"
       # Writable spill dir under HOME — the default temp dir is next to the DB on the :ro mount.
       DUCKDB_TEMP_DIR: /home/api/.duckdb_tmp
+      # GEO-21 agent (Pydantic AI). The real values come from `.env` (env_file above); these
+      # explicit passthroughs document the contract and supply safe non-secret defaults via
+      # ${VAR:-default}. NEVER inline a real key here — secrets stay in .env / CI secrets only.
+      #   GOOGLE_API_KEY    : Gemini Developer API key (SECRET; blank default → agent disabled).
+      #   ANTHROPIC_API_KEY : kept for a one-flip provider switch-back (SECRET; blank default).
+      #   AGENT_MODEL       : provider:model string Pydantic AI resolves (default Gemini Flash).
+      # The AGENT_* limit knobs are the API's safety caps; the API owns their exact defaults
+      # (the values here are best-effort placeholders kept in sync with nginx /api/agent limits).
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      AGENT_MODEL: ${AGENT_MODEL:-google:gemini-3.5-flash}
+      AGENT_TIMEOUT_S: ${AGENT_TIMEOUT_S:-60}
+      AGENT_MAX_MESSAGE_CHARS: ${AGENT_MAX_MESSAGE_CHARS:-4000}
+      AGENT_MAX_CONCURRENCY: ${AGENT_MAX_CONCURRENCY:-4}
     volumes:
       - data:/data:ro             # read-only artifact (GEO-15 opens DuckDB read_only=True)
     expose:
@@ -61,6 +75,13 @@ services:
     restart: unless-stopped       # GEO-35: long-running service (NOT the one-shot ingest/frontend)
     mem_limit: 1g                 # GEO-35: VPS sizing — DuckDB + spatial + scoring working set
     cpus: 2                       # GEO-35: must match DUCKDB_THREADS above
+    # GEO-37: bound on-disk log growth (json-file driver, rotated). Without this the default
+    # json-file logs are unbounded and can fill a small VPS disk.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     # Readiness comes from the image's HEALTHCHECK (api/Dockerfile -> GET /api/health); compose
     # uses it for `web`'s depends_on: service_healthy. NB: /api/health is 200 only once the
     # artifact exists, so run `docker compose run --rm ingest` before `up` on a fresh stack.
@@ -95,6 +116,12 @@ services:
     restart: unless-stopped         # GEO-35
     mem_limit: 256m                 # GEO-35: nginx is light
     cpus: 1                         # GEO-35
+    # GEO-37: rotate the access/error logs (latency `log_format timed` in web/nginx.conf).
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   data:                           # the read-only artifact (ingest rw; api/web ro)

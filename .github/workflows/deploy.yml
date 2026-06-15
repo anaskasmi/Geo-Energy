@@ -1,0 +1,102 @@
+# GEO-38 — Deploy (GATED). Builds + pushes the service images to GHCR, then rolls the stack on
+# the host over SSH. Every host/credential value lives in the `production` GitHub Environment
+# secrets — NOTHING is hardcoded. The environment gate (required reviewers / branch rules) is
+# what makes this safe; the deploy job also hard-fails if its secrets are unset.
+#
+# Trigger: manual dispatch, or automatically on push to main (which is itself only reached after
+# branch protection requires CI green). To make it dispatch-only, delete the `push:` block.
+name: Deploy
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  # ghcr.io/<owner>/<repo>/<service>. GHCR paths MUST be lowercase; the "Normalize" step in the
+  # job downcases the full owner/repo, so an uppercase owner/org login (e.g. after a transfer or
+  # fork to a CamelCase org) is handled too — not just the repo name. This is the fallback value.
+  IMAGE_NAMESPACE: ${{ github.repository }}
+
+jobs:
+  build-and-push:
+    name: Build + push images (GHCR)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write          # push to GHCR with the ephemeral GITHUB_TOKEN — no PAT needed
+    strategy:
+      matrix:
+        include:
+          - { service: api, context: ./api }
+          - { service: web, context: ./web }
+          - { service: ingest, context: ./ingest }
+          - { service: frontend, context: ./frontend }
+    steps:
+      - uses: actions/checkout@v4
+      - name: Normalize image namespace to lowercase (GHCR requirement)
+        run: echo "IMAGE_NAMESPACE=${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+      - uses: docker/setup-buildx-action@v3
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build + push ${{ matrix.service }}
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ matrix.service }}:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ matrix.service }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          # Only the frontend Dockerfile consumes these (public Vite build args; MAPBOX_TOKEN is
+          # a publishable client token, not a server secret). Other images ignore them.
+          build-args: |
+            VITE_API_BASE_URL=/api
+            VITE_MAPBOX_TOKEN=${{ secrets.MAPBOX_TOKEN }}
+            VITE_PARCELS_PMTILES_URL=/data/current/parcels.pmtiles
+
+  deploy:
+    name: Roll the stack on the host
+    needs: build-and-push
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production    # GATE: required reviewers/branch rules + holds the DEPLOY_* secrets
+    permissions:
+      contents: read
+    steps:
+      - name: Deploy over SSH (scaffold)
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          # Fail loudly if the production environment hasn't been wired up yet.
+          : "${DEPLOY_HOST:?set DEPLOY_HOST in the production environment secrets}"
+          : "${DEPLOY_USER:?set DEPLOY_USER}"
+          : "${DEPLOY_SSH_KEY:?set DEPLOY_SSH_KEY}"
+          : "${DEPLOY_PATH:?set DEPLOY_PATH}"
+
+          install -m 600 /dev/null deploy_key
+          printf '%s\n' "$DEPLOY_SSH_KEY" > deploy_key
+
+          # The host checkout holds docker-compose.yml + a small override that pins the GHCR
+          # images to ${IMAGE_TAG} (see docs/GEO-38-cicd-cdn.md). Pull the new images and roll
+          # only the long-running services; ingest/frontend are one-shot and run separately.
+          ssh -o StrictHostKeyChecking=accept-new -i deploy_key "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "cd '${DEPLOY_PATH}' && export IMAGE_TAG='${IMAGE_TAG}' && \
+             docker compose pull api web && \
+             docker compose up -d api web && \
+             docker image prune -f"
