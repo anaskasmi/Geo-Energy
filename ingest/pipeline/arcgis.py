@@ -46,6 +46,8 @@ def fetch_featureserver_geojson(
     where: str = "1=1",
     out_fields: str = "*",
     out_sr: int = 4326,
+    bbox: tuple[float, float, float, float] | None = None,
+    in_sr: int = 4326,
     page_size: int = 2000,
     max_pages: int = 10_000,
     transport: httpx.BaseTransport | None = None,
@@ -57,6 +59,11 @@ def fetch_featureserver_geojson(
 
     Returns the feature count. Raises SourceError on an ArcGIS error payload or if
     pagination fails to terminate within `max_pages`.
+
+    `bbox` (xmin, ymin, xmax, ymax in `in_sr`, default 4326) adds a server-side envelope
+    intersection filter — essential for national layers (HIFLD) so only the study-area
+    subset is downloaded instead of the whole country. A finer per-feature clip to the
+    actual county polygon still happens in the fetcher (the envelope is a coarse prefilter).
     """
     dest = Path(dest)
     log = logger or _log
@@ -67,6 +74,14 @@ def fetch_featureserver_geojson(
         "f": "geojson",
         "returnGeometry": "true",
     }
+    if bbox is not None:
+        xmin, ymin, xmax, ymax = bbox
+        base.update(
+            geometry=f"{xmin},{ymin},{xmax},{ymax}",
+            geometryType="esriGeometryEnvelope",
+            inSR=str(in_sr),
+            spatialRel="esriSpatialRelIntersects",
+        )
     features: list[dict] = []
     offset = 0
     with httpx.Client(transport=transport, timeout=timeout, follow_redirects=True) as client:

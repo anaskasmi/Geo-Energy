@@ -1,0 +1,10 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "OBJECTID": 7, "NAME": "WHEELER RIDGE", "MAX_VOLTAG": 500, "MIN_VOLTAG": 230 },
+      "geometry": { "type": "Point", "coordinates": [-119.0, 35.0] }
+    }
+  ]
+}

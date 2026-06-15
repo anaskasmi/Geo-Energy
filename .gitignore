@@ -19,6 +19,10 @@ data/
 # but keep tiny fixtures used by tests
 !ingest/tests/**/*.parquet
 !ingest/tests/**/*.geoparquet
+# and keep source-controlled reference data shipped inside the ingest package (e.g. the
+# curated zoning_rules.csv, FR-A2) — this is code, not a built artifact.
+!ingest/pipeline/data/
+!ingest/pipeline/data/**
 
 # ── Python ─────────────────────────────────────────────────────────────────────
 __pycache__/

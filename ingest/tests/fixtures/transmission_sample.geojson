@@ -1,0 +1,30 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "ID": "TL-A", "VOLTAGE": 230, "VOLT_CLASS": "220-287", "OWNER": "PACIFIC GAS & ELECTRIC COMPANY", "TYPE": "AC; OVERHEAD", "STATUS": "IN SERVICE" },
+      "geometry": { "type": "LineString", "coordinates": [[-119.5, 35.2], [-119.0, 35.3]] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "ID": "TL-B", "VOLTAGE": 115, "VOLT_CLASS": "100-161", "OWNER": "SOUTHERN CALIFORNIA EDISON", "TYPE": "AC; OVERHEAD", "STATUS": "IN SERVICE" },
+      "geometry": { "type": "LineString", "coordinates": [[-118.5, 35.2], [-117.5, 35.2]] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "ID": "TL-C", "VOLTAGE": 500, "VOLT_CLASS": "345-735", "OWNER": "BONNEVILLE POWER ADMINISTRATION", "TYPE": "AC; OVERHEAD", "STATUS": "IN SERVICE" },
+      "geometry": { "type": "LineString", "coordinates": [[-117.0, 36.0], [-116.5, 36.1]] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "ID": "TL-D", "VOLTAGE": -999999, "VOLT_CLASS": "NOT AVAILABLE", "OWNER": "NOT AVAILABLE", "TYPE": "AC; OVERHEAD", "STATUS": "IN SERVICE" },
+      "geometry": { "type": "LineString", "coordinates": [[-119.2, 35.0], [-119.1, 35.05]] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "ID": "TL-E", "VOLTAGE": 0, "VOLT_CLASS": "NOT AVAILABLE", "OWNER": "PACIFIC GAS & ELECTRIC COMPANY", "TYPE": "AC; OVERHEAD", "STATUS": "IN SERVICE" },
+      "geometry": { "type": "LineString", "coordinates": [[-119.8, 35.5], [-119.7, 35.55]] }
+    }
+  ]
+}

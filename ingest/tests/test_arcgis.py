@@ -119,3 +119,41 @@ def test_fallback_all_fail_raises(tmp_path):
             ["https://a/FeatureServer/0", "https://b/FeatureServer/0"],
             tmp_path / "p.geojson", transport=httpx.MockTransport(handler), retries=1,
         )
+
+
+def test_bbox_sends_envelope_filter_params(tmp_path):
+    """GEO-6: the county bbox must reach the server as an envelope-intersection filter so a
+    national HIFLD layer isn't downloaded whole. Capture and assert the exact query params."""
+    captured = {}
+
+    def handler(request):
+        captured.update(dict(request.url.params))
+        return httpx.Response(200, json={"features": [_feature(0)], "exceededTransferLimit": False})
+
+    n = arcgis.fetch_featureserver_geojson(
+        "https://srv/FeatureServer/0", tmp_path / "p.geojson",
+        bbox=(-120.2, 34.7, -117.6, 35.8), in_sr=4326,
+        transport=httpx.MockTransport(handler),
+    )
+    assert n == 1
+    assert captured["geometry"] == "-120.2,34.7,-117.6,35.8"
+    assert captured["geometryType"] == "esriGeometryEnvelope"
+    assert captured["spatialRel"] == "esriSpatialRelIntersects"
+    assert captured["inSR"] == "4326"
+    assert captured["outSR"] == "4326"
+
+
+def test_no_bbox_omits_envelope_filter_params(tmp_path):
+    captured = {}
+
+    def handler(request):
+        captured.update(dict(request.url.params))
+        return httpx.Response(200, json={"features": [], "exceededTransferLimit": False})
+
+    arcgis.fetch_featureserver_geojson(
+        "https://srv/FeatureServer/0", tmp_path / "p.geojson",
+        transport=httpx.MockTransport(handler),
+    )
+    assert "geometry" not in captured
+    assert "geometryType" not in captured
+    assert "spatialRel" not in captured

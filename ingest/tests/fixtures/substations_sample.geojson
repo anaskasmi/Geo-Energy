@@ -1,0 +1,25 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "ID": "SS-1", "NAME": "PINETREE", "MAX_VOLT": 230, "MIN_VOLT": 66, "TYPE": "SUBSTATION", "STATUS": "IN SERVICE" },
+      "geometry": { "type": "Point", "coordinates": [-119.0, 35.0] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "ID": "SS-2", "NAME": "MONOLITH", "MAX_VOLT": 0, "MIN_VOLT": 0, "TYPE": "SUBSTATION", "STATUS": "IN SERVICE" },
+      "geometry": { "type": "Point", "coordinates": [-118.5, 35.5] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "ID": "SS-3", "NAME": "SENTINEL", "MAX_VOLT": -999999, "MIN_VOLT": -999999, "TYPE": "SUBSTATION", "STATUS": "IN SERVICE" },
+      "geometry": { "type": "Point", "coordinates": [-119.5, 35.1] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "ID": "SS-4", "NAME": "OUTSIDE COUNTY", "MAX_VOLT": 500, "MIN_VOLT": 230, "TYPE": "SUBSTATION", "STATUS": "IN SERVICE" },
+      "geometry": { "type": "Point", "coordinates": [-117.0, 36.0] }
+    }
+  ]
+}

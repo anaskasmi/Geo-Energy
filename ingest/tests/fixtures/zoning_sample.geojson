@@ -1,0 +1,35 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "Zn_Cd1": "A", "Comb_Zn": "A", "Dscrptn": "EXCLUSIVE AGRICULTURE" },
+      "geometry": { "type": "Polygon", "coordinates": [[[-119.5, 35.2], [-119.4, 35.2], [-119.4, 35.3], [-119.5, 35.3], [-119.5, 35.2]]] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "Zn_Cd1": "M-1", "Comb_Zn": "M-1", "Dscrptn": "LIGHT INDUSTRIAL" },
+      "geometry": { "type": "Polygon", "coordinates": [[[-119.3, 35.2], [-119.2, 35.2], [-119.2, 35.3], [-119.3, 35.3], [-119.3, 35.2]]] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "Zn_Cd1": "E(20)*", "Comb_Zn": "E(20)* GH", "Dscrptn": "ESTATE 20 ACRE, GEOLOGIC HAZARD COMBINING" },
+      "geometry": { "type": "Polygon", "coordinates": [[[-119.1, 35.2], [-119.0, 35.2], [-119.0, 35.3], [-119.1, 35.3], [-119.1, 35.2]]] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "Zn_Cd1": "NR(40)", "Comb_Zn": "NR(40)", "Dscrptn": "NATURAL RESOURCE 40 ACRE" },
+      "geometry": { "type": "Polygon", "coordinates": [[[-119.5, 35.0], [-119.4, 35.0], [-119.4, 35.1], [-119.5, 35.1], [-119.5, 35.0]]] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "Zn_Cd1": "R-1", "Comb_Zn": "R-1", "Dscrptn": "LOW DENSITY RESIDENTIAL" },
+      "geometry": { "type": "Polygon", "coordinates": [[[-119.3, 35.0], [-119.2, 35.0], [-119.2, 35.1], [-119.3, 35.1], [-119.3, 35.0]]] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "Zn_Cd1": "", "Comb_Zn": "", "Dscrptn": "UNCLASSIFIED" },
+      "geometry": { "type": "Polygon", "coordinates": [[[-119.1, 35.0], [-119.0, 35.0], [-119.0, 35.1], [-119.1, 35.1], [-119.1, 35.0]]] }
+    }
+  ]
+}

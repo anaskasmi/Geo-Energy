@@ -1,0 +1,15 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "GP_DESIG": "8.1", "LU_DESC": "Intensive Agriculture", "SP_NAME": "" },
+      "geometry": { "type": "Polygon", "coordinates": [[[-119.5, 35.2], [-119.3, 35.2], [-119.3, 35.4], [-119.5, 35.4], [-119.5, 35.2]]] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "GP_DESIG": "3.5", "LU_DESC": "Resource", "SP_NAME": "" },
+      "geometry": { "type": "Polygon", "coordinates": [[[-119.2, 35.0], [-119.0, 35.0], [-119.0, 35.2], [-119.2, 35.2], [-119.2, 35.0]]] }
+    }
+  ]
+}

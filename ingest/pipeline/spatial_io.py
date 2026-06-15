@@ -13,9 +13,19 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Sequence
 
-from .sqlutil import sql_str
+from .sqlutil import ident, sql_str
 
 GEOM_COLUMN = "geom"  # ST_Read names the geometry column `geom`
+
+
+def text_or_null(col: str | None) -> str:
+    """SQL for a descriptive attribute as VARCHAR, or a typed NULL when the field is absent.
+
+    Source attributes resolved with `pick_column(..., required=False)` may be missing; this
+    keeps the projected column well-typed (VARCHAR) instead of an untyped NULL literal that
+    would break a downstream Parquet COPY.
+    """
+    return f"CAST({ident(col)} AS VARCHAR)" if col else "CAST(NULL AS VARCHAR)"
 
 
 def vsizip(zip_path: str | Path, inner: str) -> str:

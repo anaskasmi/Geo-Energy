@@ -21,6 +21,11 @@ def _hermetic_sources(monkeypatch):
     monkeypatch.setenv(config.PARCELS_GEODAT_URL_ENV, "")
     monkeypatch.setenv(config.PARCELS_SHAFTER_URL_ENV, "")
     monkeypatch.setenv(config.COUNTY_URL_ENV, "")
+    monkeypatch.setenv(config.TRANSMISSION_URL_ENV, "")
+    monkeypatch.setenv(config.SUBSTATIONS_URL_ENV, "")
+    monkeypatch.setenv(config.ZONING_URL_ENV, "")
+    monkeypatch.setenv(config.GENERAL_PLAN_URL_ENV, "")
+    monkeypatch.setenv(config.SPECIFIC_PLANS_URL_ENV, "")
 
 
 def make_settings(tmp_path, keep=3):

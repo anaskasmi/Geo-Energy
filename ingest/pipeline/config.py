@@ -64,6 +64,74 @@ PARCELS_APN_FIELD_ENV = "GEO_PARCELS_APN_FIELD"  # force the APN attribute name
 # Candidate APN attribute names, tried case-insensitively in order (GEODAT uses "APN").
 PARCELS_APN_FIELDS = ("APN", "APN9", "ParcelID", "PARCEL_ID", "PARCELID", "APN_LABEL", "AIN")
 
+# ── Transmission lines + substations (GEO-6, HIFLD national layers) ─────────────
+# These are national datasets, so we prefilter server-side to the county bbox (the ArcGIS
+# envelope filter, arcgis.py) and then clip precisely to the county polygon in DuckDB.
+# Both confirmed public / token-free 2026-06-15 and served as f=geojson in EPSG:4326.
+# Voltage uses HIFLD's documented "not available" sentinel (-999999); the transmission
+# re-host is already clean (100-1000 kV) while the substations re-host encodes unknown as
+# 0, so we null out both the sentinel and any non-positive voltage (0 kV is not a real value).
+TRANSMISSION_URL = (
+    "https://services1.arcgis.com/Hp6G80Pky0om7QvQ/arcgis/rest/services/"
+    "Electric_Power_Transmission_Lines/FeatureServer/0"
+)
+SUBSTATIONS_URL = (
+    "https://services.arcgis.com/XG15cJAlne2vxtgt/arcgis/rest/services/"
+    "Electric_Substations/FeatureServer/0"
+)
+TRANSMISSION_URL_ENV = "GEO_TRANSMISSION_URL"
+SUBSTATIONS_URL_ENV = "GEO_SUBSTATIONS_URL"
+TRANSMISSION_SOURCE_ENV = "GEO_TRANSMISSION_SOURCE"   # pre-staged local file (GeoJSON, 4326)
+SUBSTATIONS_SOURCE_ENV = "GEO_SUBSTATIONS_SOURCE"
+TRANSMISSION_SOURCE_CRS_ENV = "GEO_TRANSMISSION_SOURCE_CRS"
+SUBSTATIONS_SOURCE_CRS_ENV = "GEO_SUBSTATIONS_SOURCE_CRS"
+# Voltage attribute candidates (resolved case-insensitively, first match wins).
+TRANSMISSION_VOLTAGE_FIELDS = ("VOLTAGE", "VOLT_KV", "KV")
+SUBSTATIONS_VOLTAGE_FIELDS = ("MAX_VOLT", "MAX_VOLTAG", "VOLTAGE", "MAX_KV")
+SUBSTATIONS_MIN_VOLTAGE_FIELDS = ("MIN_VOLT", "MIN_VOLTAG", "MIN_KV")
+# HIFLD "not available" sentinels for numeric attributes (nulled along with v <= 0).
+VOLTAGE_NULL_SENTINELS = (-999999, -999998)
+
+# ── Zoning / land-use (GEO-5, Kern County GEODAT) ──────────────────────────────
+# Kern County's own GIS layers (already county-scoped, so no clip needed). Primary
+# zoning-district code field is `Zn_Cd1` (confirmed 2026-06-15); general plan carries the
+# land-use designation in `GP_DESIG`/`LU_DESC`; specific plans carry a plan name.
+ZONING_URL = (
+    "https://services5.arcgis.com/Y8jwjGUWbRjuqpG5/arcgis/rest/services/"
+    "Kern_County_Zoning/FeatureServer/0"
+)
+GENERAL_PLAN_URL = (
+    "https://services5.arcgis.com/Y8jwjGUWbRjuqpG5/arcgis/rest/services/"
+    "kc_general_plan/FeatureServer/0"
+)
+SPECIFIC_PLANS_URL = (
+    "https://services5.arcgis.com/Y8jwjGUWbRjuqpG5/arcgis/rest/services/"
+    "specific_plans/FeatureServer/0"
+)
+ZONING_URL_ENV = "GEO_ZONING_URL"
+GENERAL_PLAN_URL_ENV = "GEO_GENERAL_PLAN_URL"
+SPECIFIC_PLANS_URL_ENV = "GEO_SPECIFIC_PLANS_URL"
+ZONING_SOURCE_ENV = "GEO_ZONING_SOURCE"               # pre-staged local file (GeoJSON, 4326)
+GENERAL_PLAN_SOURCE_ENV = "GEO_GENERAL_PLAN_SOURCE"
+SPECIFIC_PLANS_SOURCE_ENV = "GEO_SPECIFIC_PLANS_SOURCE"
+ZONING_SOURCE_CRS_ENV = "GEO_ZONING_SOURCE_CRS"
+GENERAL_PLAN_SOURCE_CRS_ENV = "GEO_GENERAL_PLAN_SOURCE_CRS"
+SPECIFIC_PLANS_SOURCE_CRS_ENV = "GEO_SPECIFIC_PLANS_SOURCE_CRS"
+ZONING_CODE_FIELDS = ("Zn_Cd1", "ZONE", "ZONING", "ZONE_CODE", "ZONECODE", "ZONE_CD")
+ZONING_DESC_FIELDS = ("Dscrptn", "DESCRIPTION", "ZONE_DESC", "DESC")
+ZONING_COMBINED_FIELDS = ("Comb_Zn", "COMBINED", "COMB_ZONE")
+GENERAL_PLAN_DESIG_FIELDS = ("GP_DESIG", "DESIG", "GP_CODE", "GPDESIG")
+GENERAL_PLAN_LU_FIELDS = ("LU_DESC", "LU_DESCRIP", "LANDUSE", "DESCRIPTION")
+SPECIFIC_PLANS_NAME_FIELDS = ("SP_NAME_1", "SP_NAME", "NAME", "PLAN_NAME")
+# Curated code → permission lookup (FR-A2). Checked into the repo, emitted to each build,
+# and validated for coverage against the zoning codes actually present in the data.
+ZONING_RULES_CSV = "zoning_rules.csv"
+ZONING_USE_CASES = ("solar", "wind", "storage", "data_center")
+ZONING_PERMISSIONS = ("by_right", "conditional", "prohibited")
+# Safe default when a zone code has no curated rule (degrade to "needs review", never
+# silently by-right). Surfaced as a warning by the fetcher.
+ZONING_DEFAULT_PERMISSION = "conditional"
+
 
 @dataclass(frozen=True)
 class Settings:

@@ -1,0 +1,15 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "SP_NAME_1": "Tejon Ranch" },
+      "geometry": { "type": "Polygon", "coordinates": [[[-119.0, 34.95], [-118.6, 34.95], [-118.6, 35.2], [-119.0, 35.2], [-119.0, 34.95]]] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "SP_NAME_1": "Stallion Springs" },
+      "geometry": { "type": "Polygon", "coordinates": [[[-118.8, 35.3], [-118.7, 35.3], [-118.7, 35.4], [-118.8, 35.4], [-118.8, 35.3]]] }
+    }
+  ]
+}

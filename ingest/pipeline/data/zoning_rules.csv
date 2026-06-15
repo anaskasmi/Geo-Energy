@@ -1,0 +1,109 @@
+zone_code,zone_name,use_case,permission,basis
+A,Exclusive Agriculture,solar,conditional,Ch.19.12: non-accessory solar + electric power plant + commercial wind = CUP (19.12.030.G); accessory solar/small wind by-right. BESS/data center by energy/similar-use CUP.
+A,Exclusive Agriculture,wind,conditional,Ch.19.12: non-accessory solar + electric power plant + commercial wind = CUP (19.12.030.G); accessory solar/small wind by-right. BESS/data center by energy/similar-use CUP.
+A,Exclusive Agriculture,storage,conditional,Ch.19.12: non-accessory solar + electric power plant + commercial wind = CUP (19.12.030.G); accessory solar/small wind by-right. BESS/data center by energy/similar-use CUP.
+A,Exclusive Agriculture,data_center,conditional,Ch.19.12: non-accessory solar + electric power plant + commercial wind = CUP (19.12.030.G); accessory solar/small wind by-right. BESS/data center by energy/similar-use CUP.
+A-1,Limited Agriculture,solar,conditional,"Ch.19.14.030.G: non-accessory solar, commercial wind, power plant (excl nuclear/coal) = CUP; accessory by-right. Storage/data by analogy = CUP."
+A-1,Limited Agriculture,wind,conditional,"Ch.19.14.030.G: non-accessory solar, commercial wind, power plant (excl nuclear/coal) = CUP; accessory by-right. Storage/data by analogy = CUP."
+A-1,Limited Agriculture,storage,conditional,"Ch.19.14.030.G: non-accessory solar, commercial wind, power plant (excl nuclear/coal) = CUP; accessory by-right. Storage/data by analogy = CUP."
+A-1,Limited Agriculture,data_center,conditional,"Ch.19.14.030.G: non-accessory solar, commercial wind, power plant (excl nuclear/coal) = CUP; accessory by-right. Storage/data by analogy = CUP."
+E,Estate,solar,prohibited,Ch.19.16: only accessory solar by-right; commercial/domestic wind = CUP (19.16.030.H). Residential — no utility solar/BESS/data center.
+E,Estate,wind,conditional,Ch.19.16: only accessory solar by-right; commercial/domestic wind = CUP (19.16.030.H). Residential — no utility solar/BESS/data center.
+E,Estate,storage,prohibited,Ch.19.16: only accessory solar by-right; commercial/domestic wind = CUP (19.16.030.H). Residential — no utility solar/BESS/data center.
+E,Estate,data_center,prohibited,Ch.19.16: only accessory solar by-right; commercial/domestic wind = CUP (19.16.030.H). Residential — no utility solar/BESS/data center.
+R-1,Low-Density Residential,solar,prohibited,Ch.19.18: accessory solar by-right; commercial/domestic wind = CUP (19.18.030.E). No utility solar/storage/data center.
+R-1,Low-Density Residential,wind,conditional,Ch.19.18: accessory solar by-right; commercial/domestic wind = CUP (19.18.030.E). No utility solar/storage/data center.
+R-1,Low-Density Residential,storage,prohibited,Ch.19.18: accessory solar by-right; commercial/domestic wind = CUP (19.18.030.E). No utility solar/storage/data center.
+R-1,Low-Density Residential,data_center,prohibited,Ch.19.18: accessory solar by-right; commercial/domestic wind = CUP (19.18.030.E). No utility solar/storage/data center.
+R-2,Medium-Density Residential,solar,prohibited,Ch.19.20: accessory solar by-right; commercial/domestic wind = CUP (19.20.030.F).
+R-2,Medium-Density Residential,wind,conditional,Ch.19.20: accessory solar by-right; commercial/domestic wind = CUP (19.20.030.F).
+R-2,Medium-Density Residential,storage,prohibited,Ch.19.20: accessory solar by-right; commercial/domestic wind = CUP (19.20.030.F).
+R-2,Medium-Density Residential,data_center,prohibited,Ch.19.20: accessory solar by-right; commercial/domestic wind = CUP (19.20.030.F).
+R-3,High-Density Residential,solar,prohibited,Ch.19.22: accessory solar by-right; commercial/domestic wind = CUP (19.22.030.F).
+R-3,High-Density Residential,wind,conditional,Ch.19.22: accessory solar by-right; commercial/domestic wind = CUP (19.22.030.F).
+R-3,High-Density Residential,storage,prohibited,Ch.19.22: accessory solar by-right; commercial/domestic wind = CUP (19.22.030.F).
+R-3,High-Density Residential,data_center,prohibited,Ch.19.22: accessory solar by-right; commercial/domestic wind = CUP (19.22.030.F).
+C-1,Neighborhood Commercial,solar,prohibited,Ch.19.30: accessory solar + small wind by-right; commercial wind = CUP (19.30.030.H). Neighborhood scale — no utility solar/BESS/data center.
+C-1,Neighborhood Commercial,wind,conditional,Ch.19.30: accessory solar + small wind by-right; commercial wind = CUP (19.30.030.H). Neighborhood scale — no utility solar/BESS/data center.
+C-1,Neighborhood Commercial,storage,prohibited,Ch.19.30: accessory solar + small wind by-right; commercial wind = CUP (19.30.030.H). Neighborhood scale — no utility solar/BESS/data center.
+C-1,Neighborhood Commercial,data_center,prohibited,Ch.19.30: accessory solar + small wind by-right; commercial wind = CUP (19.30.030.H). Neighborhood scale — no utility solar/BESS/data center.
+C-2,General Commercial,solar,prohibited,Ch.19.32: accessory solar by-right; commercial wind + waste-to-energy = CUP; Industrial Uses CUP (19.32.030.D) -> BESS/large data center = CUP. No utility solar.
+C-2,General Commercial,wind,conditional,Ch.19.32: accessory solar by-right; commercial wind + waste-to-energy = CUP; Industrial Uses CUP (19.32.030.D) -> BESS/large data center = CUP. No utility solar.
+C-2,General Commercial,storage,conditional,Ch.19.32: accessory solar by-right; commercial wind + waste-to-energy = CUP; Industrial Uses CUP (19.32.030.D) -> BESS/large data center = CUP. No utility solar.
+C-2,General Commercial,data_center,conditional,Ch.19.32: accessory solar by-right; commercial wind + waste-to-energy = CUP; Industrial Uses CUP (19.32.030.D) -> BESS/large data center = CUP. No utility solar.
+CH,Highway Commercial,solar,prohibited,Ch.19.34: accessory solar + small wind by-right; commercial wind + utility substation = CUP (19.34.030.F). Data center via similar-use CUP. No utility solar.
+CH,Highway Commercial,wind,conditional,Ch.19.34: accessory solar + small wind by-right; commercial wind + utility substation = CUP (19.34.030.F). Data center via similar-use CUP. No utility solar.
+CH,Highway Commercial,storage,conditional,Ch.19.34: accessory solar + small wind by-right; commercial wind + utility substation = CUP (19.34.030.F). Data center via similar-use CUP. No utility solar.
+CH,Highway Commercial,data_center,conditional,Ch.19.34: accessory solar + small wind by-right; commercial wind + utility substation = CUP (19.34.030.F). Data center via similar-use CUP. No utility solar.
+CO,Commercial Office,solar,prohibited,Ch.19.28: accessory solar by-right; commercial/domestic wind = CUP (19.28.030.H). Data center office-like = CUP; utility-scale BESS not appropriate in office zone.
+CO,Commercial Office,wind,conditional,Ch.19.28: accessory solar by-right; commercial/domestic wind = CUP (19.28.030.H). Data center office-like = CUP; utility-scale BESS not appropriate in office zone.
+CO,Commercial Office,storage,prohibited,Ch.19.28: accessory solar by-right; commercial/domestic wind = CUP (19.28.030.H). Data center office-like = CUP; utility-scale BESS not appropriate in office zone.
+CO,Commercial Office,data_center,conditional,Ch.19.28: accessory solar by-right; commercial/domestic wind = CUP (19.28.030.H). Data center office-like = CUP; utility-scale BESS not appropriate in office zone.
+M-1,Light Industrial,solar,conditional,Ch.19.36: offices/R&D/computer/warehouse/manufacturing by-right (19.36.020) -> data center by-right (similar use). Non-accessory solar + commercial wind + power plant = CUP (19.36.030.G); BESS = CUP.
+M-1,Light Industrial,wind,conditional,Ch.19.36: offices/R&D/computer/warehouse/manufacturing by-right (19.36.020) -> data center by-right (similar use). Non-accessory solar + commercial wind + power plant = CUP (19.36.030.G); BESS = CUP.
+M-1,Light Industrial,storage,conditional,Ch.19.36: offices/R&D/computer/warehouse/manufacturing by-right (19.36.020) -> data center by-right (similar use). Non-accessory solar + commercial wind + power plant = CUP (19.36.030.G); BESS = CUP.
+M-1,Light Industrial,data_center,by_right,Ch.19.36: offices/R&D/computer/warehouse/manufacturing by-right (19.36.020) -> data center by-right (similar use). Non-accessory solar + commercial wind + power plant = CUP (19.36.030.G); BESS = CUP.
+M-2,Medium Industrial,solar,conditional,Ch.19.38: data center by-right (industrial uses). Power plant (excl nuclear/coal) by-right (19.38.020.H) but non-accessory solar + commercial wind = CUP (19.38.030.G); BESS = CUP.
+M-2,Medium Industrial,wind,conditional,Ch.19.38: data center by-right (industrial uses). Power plant (excl nuclear/coal) by-right (19.38.020.H) but non-accessory solar + commercial wind = CUP (19.38.030.G); BESS = CUP.
+M-2,Medium Industrial,storage,conditional,Ch.19.38: data center by-right (industrial uses). Power plant (excl nuclear/coal) by-right (19.38.020.H) but non-accessory solar + commercial wind = CUP (19.38.030.G); BESS = CUP.
+M-2,Medium Industrial,data_center,by_right,Ch.19.38: data center by-right (industrial uses). Power plant (excl nuclear/coal) by-right (19.38.020.H) but non-accessory solar + commercial wind = CUP (19.38.030.G); BESS = CUP.
+M-3,Heavy Industrial,solar,conditional,Ch.19.40: data center by-right. Power plants + distribution stations by-right (19.40.020.H); non-accessory solar + commercial wind = CUP (19.40.030.G); BESS = CUP.
+M-3,Heavy Industrial,wind,conditional,Ch.19.40: data center by-right. Power plants + distribution stations by-right (19.40.020.H); non-accessory solar + commercial wind = CUP (19.40.030.G); BESS = CUP.
+M-3,Heavy Industrial,storage,conditional,Ch.19.40: data center by-right. Power plants + distribution stations by-right (19.40.020.H); non-accessory solar + commercial wind = CUP (19.40.030.G); BESS = CUP.
+M-3,Heavy Industrial,data_center,by_right,Ch.19.40: data center by-right. Power plants + distribution stations by-right (19.40.020.H); non-accessory solar + commercial wind = CUP (19.40.030.G); BESS = CUP.
+MP,Mobilehome Park,solar,prohibited,"Ch.19.26 (Mobilehome Park, residential — NOT industrial park): only mobilehome park + accessory solar; 19.26.040 prohibits all other uses."
+MP,Mobilehome Park,wind,prohibited,"Ch.19.26 (Mobilehome Park, residential — NOT industrial park): only mobilehome park + accessory solar; 19.26.040 prohibits all other uses."
+MP,Mobilehome Park,storage,prohibited,"Ch.19.26 (Mobilehome Park, residential — NOT industrial park): only mobilehome park + accessory solar; 19.26.040 prohibits all other uses."
+MP,Mobilehome Park,data_center,prohibited,"Ch.19.26 (Mobilehome Park, residential — NOT industrial park): only mobilehome park + accessory solar; 19.26.040 prohibits all other uses."
+NR,Natural Resource,solar,conditional,Ch.19.46.030.G: non-accessory solar + commercial wind + electric power plant = CUP; accessory by-right; industrial/data center via CUP.
+NR,Natural Resource,wind,conditional,Ch.19.46.030.G: non-accessory solar + commercial wind + electric power plant = CUP; accessory by-right; industrial/data center via CUP.
+NR,Natural Resource,storage,conditional,Ch.19.46.030.G: non-accessory solar + commercial wind + electric power plant = CUP; accessory by-right; industrial/data center via CUP.
+NR,Natural Resource,data_center,conditional,Ch.19.46.030.G: non-accessory solar + commercial wind + electric power plant = CUP; accessory by-right; industrial/data center via CUP.
+MS,Mobilehome Subdivision (interim),solar,prohibited,"Ch.19.78.025 follows R-1 (Ch.19.18) — NOT mineral/petroleum: accessory solar by-right, commercial wind = CUP, no utility solar/storage/data center."
+MS,Mobilehome Subdivision (interim),wind,conditional,"Ch.19.78.025 follows R-1 (Ch.19.18) — NOT mineral/petroleum: accessory solar by-right, commercial wind = CUP, no utility solar/storage/data center."
+MS,Mobilehome Subdivision (interim),storage,prohibited,"Ch.19.78.025 follows R-1 (Ch.19.18) — NOT mineral/petroleum: accessory solar by-right, commercial wind = CUP, no utility solar/storage/data center."
+MS,Mobilehome Subdivision (interim),data_center,prohibited,"Ch.19.78.025 follows R-1 (Ch.19.18) — NOT mineral/petroleum: accessory solar by-right, commercial wind = CUP, no utility solar/storage/data center."
+DI,Drilling Island,solar,conditional,"Ch.19.48: accessory solar by-right, non-accessory solar = CUP (19.48.030); 19.48.040 prohibits all other uses -> wind/storage/data center prohibited."
+DI,Drilling Island,wind,prohibited,"Ch.19.48: accessory solar by-right, non-accessory solar = CUP (19.48.030); 19.48.040 prohibits all other uses -> wind/storage/data center prohibited."
+DI,Drilling Island,storage,prohibited,"Ch.19.48: accessory solar by-right, non-accessory solar = CUP (19.48.030); 19.48.040 prohibits all other uses -> wind/storage/data center prohibited."
+DI,Drilling Island,data_center,prohibited,"Ch.19.48: accessory solar by-right, non-accessory solar = CUP (19.48.030); 19.48.040 prohibits all other uses -> wind/storage/data center prohibited."
+PL,Platted Lands,solar,prohibited,Ch.19.53: accessory solar + small wind by-right; commercial/domestic wind = CUP (19.53.030.E); utility substation/public-utility bldg + offices via CUP. No primary solar listed -> utility solar prohibited.
+PL,Platted Lands,wind,conditional,Ch.19.53: accessory solar + small wind by-right; commercial/domestic wind = CUP (19.53.030.E); utility substation/public-utility bldg + offices via CUP. No primary solar listed -> utility solar prohibited.
+PL,Platted Lands,storage,conditional,Ch.19.53: accessory solar + small wind by-right; commercial/domestic wind = CUP (19.53.030.E); utility substation/public-utility bldg + offices via CUP. No primary solar listed -> utility solar prohibited.
+PL,Platted Lands,data_center,conditional,Ch.19.53: accessory solar + small wind by-right; commercial/domestic wind = CUP (19.53.030.E); utility substation/public-utility bldg + offices via CUP. No primary solar listed -> utility solar prohibited.
+OS,Open Space,solar,prohibited,Ch.19.44: only grazing/trails/transmission lines/oil-gas; 19.44.040 prohibits all other uses.
+OS,Open Space,wind,prohibited,Ch.19.44: only grazing/trails/transmission lines/oil-gas; 19.44.040 prohibits all other uses.
+OS,Open Space,storage,prohibited,Ch.19.44: only grazing/trails/transmission lines/oil-gas; 19.44.040 prohibits all other uses.
+OS,Open Space,data_center,prohibited,Ch.19.44: only grazing/trails/transmission lines/oil-gas; 19.44.040 prohibits all other uses.
+RF,Recreation-Forestry,solar,conditional,Ch.19.42.030.F: accessory solar/small wind by-right; non-accessory solar + commercial wind + waste-to-energy + public-utility bldg = CUP; data center via similar-use CUP.
+RF,Recreation-Forestry,wind,conditional,Ch.19.42.030.F: accessory solar/small wind by-right; non-accessory solar + commercial wind + waste-to-energy + public-utility bldg = CUP; data center via similar-use CUP.
+RF,Recreation-Forestry,storage,conditional,Ch.19.42.030.F: accessory solar/small wind by-right; non-accessory solar + commercial wind + waste-to-energy + public-utility bldg = CUP; data center via similar-use CUP.
+RF,Recreation-Forestry,data_center,conditional,Ch.19.42.030.F: accessory solar/small wind by-right; non-accessory solar + commercial wind + waste-to-energy + public-utility bldg = CUP; data center via similar-use CUP.
+WE,Wind Energy (combining overlay),solar,conditional,Ch.19.64.020.B: production & prototype wind generators PERMITTED BY-RIGHT; experimental/manufacture = CUP. Overlays A/A-1/E/M-1/M-2/M-3/NR/RF; solar/storage/data follow base district.
+WE,Wind Energy (combining overlay),wind,by_right,Ch.19.64.020.B: production & prototype wind generators PERMITTED BY-RIGHT; experimental/manufacture = CUP. Overlays A/A-1/E/M-1/M-2/M-3/NR/RF; solar/storage/data follow base district.
+WE,Wind Energy (combining overlay),storage,conditional,Ch.19.64.020.B: production & prototype wind generators PERMITTED BY-RIGHT; experimental/manufacture = CUP. Overlays A/A-1/E/M-1/M-2/M-3/NR/RF; solar/storage/data follow base district.
+WE,Wind Energy (combining overlay),data_center,conditional,Ch.19.64.020.B: production & prototype wind generators PERMITTED BY-RIGHT; experimental/manufacture = CUP. Overlays A/A-1/E/M-1/M-2/M-3/NR/RF; solar/storage/data follow base district.
+KRC,Kern River Plan/Corridor (combining overlay),solar,conditional,Ch.19.73: inherits underlying base district uses AND adds discretionary Kern River Development Permit -> treat all as conditional; actual status depends on base district.
+KRC,Kern River Plan/Corridor (combining overlay),wind,conditional,Ch.19.73: inherits underlying base district uses AND adds discretionary Kern River Development Permit -> treat all as conditional; actual status depends on base district.
+KRC,Kern River Plan/Corridor (combining overlay),storage,conditional,Ch.19.73: inherits underlying base district uses AND adds discretionary Kern River Development Permit -> treat all as conditional; actual status depends on base district.
+KRC,Kern River Plan/Corridor (combining overlay),data_center,conditional,Ch.19.73: inherits underlying base district uses AND adds discretionary Kern River Development Permit -> treat all as conditional; actual status depends on base district.
+SP,Special Planning,solar,conditional,Ch.19.52: uses defined by the adopted specific plan for each SP area; not determinable from Title 19 alone — read the governing specific plan.
+SP,Special Planning,wind,conditional,Ch.19.52: uses defined by the adopted specific plan for each SP area; not determinable from Title 19 alone — read the governing specific plan.
+SP,Special Planning,storage,conditional,Ch.19.52: uses defined by the adopted specific plan for each SP area; not determinable from Title 19 alone — read the governing specific plan.
+SP,Special Planning,data_center,conditional,Ch.19.52: uses defined by the adopted specific plan for each SP area; not determinable from Title 19 alone — read the governing specific plan.
+FPP,Floodplain Primary (FPP),solar,conditional,"Ch.19.50 Floodplain Primary (FPP) District (floodway): permanent/critical structures severely restricted. Utility solar/wind via a floodplain development permit (CUP); BESS/data center prohibited."
+FPP,Floodplain Primary (FPP),wind,conditional,"Ch.19.50 Floodplain Primary (FPP) District (floodway): permanent/critical structures severely restricted. Utility solar/wind via a floodplain development permit (CUP); BESS/data center prohibited."
+FPP,Floodplain Primary (FPP),storage,prohibited,"Ch.19.50 Floodplain Primary (FPP) District (floodway): permanent/critical structures severely restricted. Utility solar/wind via a floodplain development permit (CUP); BESS/data center prohibited."
+FPP,Floodplain Primary (FPP),data_center,prohibited,"Ch.19.50 Floodplain Primary (FPP) District (floodway): permanent/critical structures severely restricted. Utility solar/wind via a floodplain development permit (CUP); BESS/data center prohibited."
+GI,Not a Title 19 district (GIS artifact),solar,conditional,Not in Ch.19.10 base/combining district lists; likely a GIS data artifact. Default conditional pending parcel-level zoning verification.
+GI,Not a Title 19 district (GIS artifact),wind,conditional,Not in Ch.19.10 base/combining district lists; likely a GIS data artifact. Default conditional pending parcel-level zoning verification.
+GI,Not a Title 19 district (GIS artifact),storage,conditional,Not in Ch.19.10 base/combining district lists; likely a GIS data artifact. Default conditional pending parcel-level zoning verification.
+GI,Not a Title 19 district (GIS artifact),data_center,conditional,Not in Ch.19.10 base/combining district lists; likely a GIS data artifact. Default conditional pending parcel-level zoning verification.
+P,Automobile Parking (interim),solar,prohibited,"Ch.19.78.020 (Automobile Parking, interim — NOT public facilities): uses limited to vehicle parking; storage expressly prohibited; no other structures."
+P,Automobile Parking (interim),wind,prohibited,"Ch.19.78.020 (Automobile Parking, interim — NOT public facilities): uses limited to vehicle parking; storage expressly prohibited; no other structures."
+P,Automobile Parking (interim),storage,prohibited,"Ch.19.78.020 (Automobile Parking, interim — NOT public facilities): uses limited to vehicle parking; storage expressly prohibited; no other structures."
+P,Automobile Parking (interim),data_center,prohibited,"Ch.19.78.020 (Automobile Parking, interim — NOT public facilities): uses limited to vehicle parking; storage expressly prohibited; no other structures."
+OTHER,Unknown / unmapped,solar,conditional,No zoning basis; cannot determine. Conservative placeholder — requires parcel-level zoning lookup.
+OTHER,Unknown / unmapped,wind,conditional,No zoning basis; cannot determine. Conservative placeholder — requires parcel-level zoning lookup.
+OTHER,Unknown / unmapped,storage,conditional,No zoning basis; cannot determine. Conservative placeholder — requires parcel-level zoning lookup.
+OTHER,Unknown / unmapped,data_center,conditional,No zoning basis; cannot determine. Conservative placeholder — requires parcel-level zoning lookup.

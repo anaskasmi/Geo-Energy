@@ -1,0 +1,20 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "Zn_Cd1": "A*", "Dscrptn": "EXCLUSIVE AGRICULTURE, COMBINING" },
+      "geometry": { "type": "Polygon", "coordinates": [[[-119.5, 35.2], [-119.4, 35.2], [-119.4, 35.3], [-119.5, 35.3], [-119.5, 35.2]]] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "Zn_Cd1": "MS 2 1/2", "Dscrptn": "MOBILEHOME SUBDIVISION 2.5 ACRE" },
+      "geometry": { "type": "Polygon", "coordinates": [[[-119.3, 35.2], [-119.2, 35.2], [-119.2, 35.3], [-119.3, 35.3], [-119.3, 35.2]]] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "Zn_Cd1": "m-1", "Dscrptn": "light industrial (lowercase source)" },
+      "geometry": { "type": "Polygon", "coordinates": [[[-119.1, 35.2], [-119.0, 35.2], [-119.0, 35.3], [-119.1, 35.3], [-119.1, 35.2]]] }
+    }
+  ]
+}
