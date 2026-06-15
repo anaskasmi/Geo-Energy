@@ -1,0 +1,25 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "ID": "A", "NAME": "ALPHA", "MAX_VOLT": 230, "MIN_VOLT": 66, "TYPE": "SUBSTATION", "STATUS": "IN SERVICE" },
+      "geometry": { "type": "Point", "coordinates": [-119.0, 35.0] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "ID": "B", "NAME": "BRAVO", "MAX_VOLT": 115, "MIN_VOLT": 66, "TYPE": "SUBSTATION", "STATUS": "IN SERVICE" },
+      "geometry": { "type": "Point", "coordinates": [-119.05, 35.0] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "ID": "C", "NAME": "CHARLIE", "MAX_VOLT": 500, "MIN_VOLT": 230, "TYPE": "SUBSTATION", "STATUS": "IN SERVICE" },
+      "geometry": { "type": "Point", "coordinates": [-119.2, 35.0] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "ID": "W", "NAME": "WHIRLWIND", "MAX_VOLT": 220, "MIN_VOLT": 66, "TYPE": "SUBSTATION", "STATUS": "IN SERVICE" },
+      "geometry": { "type": "Point", "coordinates": [-118.5, 35.2] }
+    }
+  ]
+}

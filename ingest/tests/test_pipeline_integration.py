@@ -31,9 +31,11 @@ def _stage_all_sources(monkeypatch):
     monkeypatch.setenv(config.PARCELS_SOURCE_ENV, str(FIXTURES / "parcels_sample.geojson"))
     monkeypatch.setenv(config.TRANSMISSION_SOURCE_ENV, str(FIXTURES / "transmission_sample.geojson"))
     monkeypatch.setenv(config.SUBSTATIONS_SOURCE_ENV, str(FIXTURES / "substations_sample.geojson"))
+    monkeypatch.setenv(config.FLOOD_SOURCE_ENV, str(FIXTURES / "flood_sample.geojson"))
     monkeypatch.setenv(config.ZONING_SOURCE_ENV, str(FIXTURES / "zoning_sample.geojson"))
     monkeypatch.setenv(config.GENERAL_PLAN_SOURCE_ENV, str(FIXTURES / "general_plan_sample.geojson"))
     monkeypatch.setenv(config.SPECIFIC_PLANS_SOURCE_ENV, str(FIXTURES / "specific_plans_sample.geojson"))
+    monkeypatch.setenv(config.CAISO_QUEUE_SOURCE_ENV, str(FIXTURES / "caiso_queue_sample.csv"))
 
 
 def test_full_build_with_all_layers(tmp_path, monkeypatch):
@@ -48,7 +50,9 @@ def test_full_build_with_all_layers(tmp_path, monkeypatch):
         con.execute("LOAD spatial;")
         counts = {
             "county_boundary": 1, "parcels": 4, "transmission_lines": 4,
-            "substations": 3, "zoning": 6, "general_plan": 2, "specific_plans": 2,
+            "substations": 3, "flood_sfha": 4, "zoning": 6, "general_plan": 2,
+            "specific_plans": 2, "caiso_queue": 5, "poi_competition": 1,
+            "caiso_queue_summary": 8,
         }
         for table, expected in counts.items():
             assert con.execute(f"SELECT count(*) FROM {table}").fetchone()[0] == expected, table
@@ -60,6 +64,18 @@ def test_full_build_with_all_layers(tmp_path, monkeypatch):
             "SELECT count(*) FROM transmission_lines t, county_boundary c "
             "WHERE NOT ST_Intersects(t.geom, c.geom)"
         ).fetchone()[0] == 0
+        # Flood: every retained polygon is SFHA and inside the county.
+        assert con.execute("SELECT count(*) FROM flood_sfha WHERE NOT sfha_flag").fetchone()[0] == 0
+        assert con.execute(
+            "SELECT count(*) FROM flood_sfha f, county_boundary c WHERE NOT ST_Intersects(f.geom, c.geom)"
+        ).fetchone()[0] == 0
+        # CAISO: geolocated POIs inherit substation voltage; county summary totals present.
+        assert con.execute(
+            "SELECT poi_voltage_kv FROM caiso_queue WHERE queue_id = 'Q1'"
+        ).fetchone()[0] == 230
+        assert con.execute(
+            "SELECT total_mw FROM caiso_queue_summary WHERE category = 'total'"
+        ).fetchone()[0] == 725.0
     finally:
         con.close()
 
@@ -67,15 +83,17 @@ def test_full_build_with_all_layers(tmp_path, monkeypatch):
     manifest = json.loads((release / config.MANIFEST_NAME).read_text())
     layer_order = [layer["name"] for layer in manifest["layers"]]
     assert layer_order == [
-        "county_boundary", "parcels", "transmission_lines", "substations",
+        "county_boundary", "parcels", "transmission_lines", "substations", "flood_sfha",
         "zoning", "general_plan", "specific_plans",
+        "caiso_queue", "poi_competition", "caiso_queue_summary",
     ]  # run_order
 
     # Intermediates + tippecanoe input + zoning_rules.csv + success marker all present.
     for artifact in (
         "county_boundary.parquet", "parcels.parquet", "parcels.geojson",
-        "transmission_lines.parquet", "substations.parquet",
+        "transmission_lines.parquet", "substations.parquet", "flood_sfha.parquet",
         "zoning.parquet", "general_plan.parquet", "specific_plans.parquet",
+        "caiso_queue.parquet", "poi_competition.parquet", "caiso_queue_summary.parquet",
         config.ZONING_RULES_CSV, config.SUCCESS_MARKER,
     ):
         assert (release / artifact).exists(), artifact

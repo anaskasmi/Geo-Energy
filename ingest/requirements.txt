@@ -5,5 +5,10 @@ pyarrow>=17,<19
 pyproj>=3.6,<4
 httpx>=0.27,<0.29
 
+# CAISO interconnection queue (GEO-7). Imported lazily, only on the live fetch path; the
+# offline build / test path uses a pre-staged CSV (GEO_CAISO_QUEUE_SOURCE) and needs neither
+# this nor the network. Pulls pandas. Loose pin here; full pinning/lockfile is GEO-33.
+gridstatus>=0.30
+
 # Dev/test (kept in-image so `make test` can run pytest inside the container).
 pytest>=8,<9

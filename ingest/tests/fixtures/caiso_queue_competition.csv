@@ -1,0 +1,4 @@
+Queue ID,Project Name,Generation Type,Capacity (MW),County,State,Status,Transmission Owner,Interconnection Location
+C1,Alpha Solar,Solar,100,Kern,CA,Active,PG&E,Alpha Substation
+C2,Bravo Wind,Wind,50,Kern,CA,Active,SCE,Bravo Substation
+C3,Charlie Storage,Storage,80,Kern,CA,Active,PG&E,Charlie Substation

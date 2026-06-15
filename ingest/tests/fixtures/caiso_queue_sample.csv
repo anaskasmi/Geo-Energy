@@ -1,0 +1,7 @@
+Queue ID,Project Name,Generation Type,Capacity (MW),County,State,Status,Transmission Owner,Interconnection Location,Queue Date,Proposed Completion Date
+Q1,Sunbird Solar,Solar,100,Kern,CA,Active,PG&E,Pinetree Substation,2023-01-01,2026-06-01
+Q2,Windy Flats,Wind,50,Kern,CA,Active,SCE,PINETREE 230 kV Sub,2023-02-01,2027-01-01
+Q3,Battery One,Storage,200,Kern,CA,Withdrawn,PG&E,Monolith,2022-05-01,2025-01-01
+Q4,Desert Power,Gas,300,Kern,CA,Completed,PG&E,Sentinel Sub,2018-01-01,2021-01-01
+Q5,Mystery Plant,Solar,75,Kern,CA,Active,PG&E,Nowhere Junction,2024-01-01,2028-01-01
+Q6,LA Solar,Solar,500,Los Angeles,CA,Active,SCE,Vincent,2023-03-01,2026-12-01

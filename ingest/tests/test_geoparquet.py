@@ -45,6 +45,26 @@ def test_intermediate_is_real_geoparquet_with_bbox(tmp_path):
     assert "POLYGON" in gtype.upper()
 
 
+@pytest.mark.parametrize("where", ["", "WHERE FALSE"])
+def test_all_null_or_empty_geometry_keeps_geoparquet_metadata(tmp_path, where):
+    """Degenerate layers (a fetcher whose geometry column is entirely NULL — e.g. caiso_queue
+    when no POI geolocates — or zero rows) must still write valid `geo` metadata and round-trip
+    as GEOMETRY, not BLOB. (DuckDB 1.1.3 does this; this guards a future engine bump that did
+    not, observed on 1.5.3.)"""
+    con = db.connect(":memory:", threads=2)
+    out = tmp_path / f"degenerate_{'empty' if where else 'allnull'}.parquet"
+    select_sql = f"SELECT i AS id, CAST(NULL AS GEOMETRY) AS geom FROM range(3) t(i) {where}"
+    geoparquet.write_intermediate(con, select_sql=select_sql, out_path=out, geom_col="geom")
+
+    meta = pq.read_metadata(out).metadata
+    assert meta is not None and b"geo" in meta, "degenerate layer lost GeoParquet `geo` metadata"
+
+    read_sql = geoparquet.read_intermediate_sql(out, geom_alias="geom")
+    gtype = con.execute(f"SELECT any_value(typeof(geom)) FROM ({read_sql})").fetchone()[0]
+    # any_value over 0 rows is NULL; over all-NULL rows the column type must still be GEOMETRY.
+    assert gtype in ("GEOMETRY", None)
+
+
 def test_path_with_apostrophe_does_not_break_sql(tmp_path):
     """A data dir containing a single quote (legal on macOS/Linux) must not break the SQL."""
     con = db.connect(":memory:", threads=2)

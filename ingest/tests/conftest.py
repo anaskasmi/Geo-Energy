@@ -1,5 +1,6 @@
 """Shared test helpers: fixture paths, Settings factory, and a FetchContext factory."""
 
+import sys
 from pathlib import Path
 
 import pytest
@@ -26,6 +27,13 @@ def _hermetic_sources(monkeypatch):
     monkeypatch.setenv(config.ZONING_URL_ENV, "")
     monkeypatch.setenv(config.GENERAL_PLAN_URL_ENV, "")
     monkeypatch.setenv(config.SPECIFIC_PLANS_URL_ENV, "")
+    monkeypatch.setenv(config.FLOOD_URL_ENV, "")
+    # CAISO (GEO-7) has no URL env — its live path lazy-imports gridstatus and calls the
+    # network. requirements.txt bundles gridstatus into the same image as pytest, so `make
+    # test` would otherwise let an un-staged CAISO fetch hit the live queue. Neutralize the
+    # import for every test (an un-staged source then raises SourceError, never a network
+    # call); a test that wants the live path stubs sys.modules["gridstatus"] itself.
+    monkeypatch.setitem(sys.modules, "gridstatus", None)
 
 
 def make_settings(tmp_path, keep=3):

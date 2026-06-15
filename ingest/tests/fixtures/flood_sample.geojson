@@ -1,0 +1,40 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "FLD_AR_ID": "F1", "FLD_ZONE": "AE", "ZONE_SUBTY": "", "SFHA_TF": "T" },
+      "geometry": { "type": "Polygon", "coordinates": [[[-119.5, 35.0], [-119.3, 35.0], [-119.3, 35.2], [-119.5, 35.2], [-119.5, 35.0]]] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "FLD_AR_ID": "F2", "FLD_ZONE": "A", "ZONE_SUBTY": "FLOODWAY", "SFHA_TF": "T" },
+      "geometry": { "type": "Polygon", "coordinates": [[[-118.8, 35.1], [-118.6, 35.1], [-118.6, 35.3], [-118.8, 35.3], [-118.8, 35.1]]] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "FLD_AR_ID": "F3", "FLD_ZONE": "VE", "ZONE_SUBTY": "", "SFHA_TF": "T" },
+      "geometry": { "type": "Polygon", "coordinates": [[[-119.0, 35.0], [-118.9, 35.0], [-118.9, 35.05], [-119.0, 35.05], [-119.0, 35.0]]] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "FLD_AR_ID": "F4", "FLD_ZONE": "X", "ZONE_SUBTY": "AREA OF MINIMAL FLOOD HAZARD", "SFHA_TF": "F" },
+      "geometry": { "type": "Polygon", "coordinates": [[[-119.2, 35.3], [-119.1, 35.3], [-119.1, 35.4], [-119.2, 35.4], [-119.2, 35.3]]] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "FLD_AR_ID": "F5", "FLD_ZONE": "D", "ZONE_SUBTY": "", "SFHA_TF": "F" },
+      "geometry": { "type": "Polygon", "coordinates": [[[-118.4, 35.0], [-118.3, 35.0], [-118.3, 35.1], [-118.4, 35.1], [-118.4, 35.0]]] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "FLD_AR_ID": "F6", "FLD_ZONE": "AO", "ZONE_SUBTY": "", "SFHA_TF": "T" },
+      "geometry": { "type": "Polygon", "coordinates": [[[-118.1, 35.2], [-117.8, 35.2], [-117.8, 35.4], [-118.1, 35.4], [-118.1, 35.2]]] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "FLD_AR_ID": "F7", "FLD_ZONE": "AE", "ZONE_SUBTY": "", "SFHA_TF": "T" },
+      "geometry": { "type": "Polygon", "coordinates": [[[-117.5, 36.0], [-117.4, 36.0], [-117.4, 36.1], [-117.5, 36.1], [-117.5, 36.0]]] }
+    }
+  ]
+}

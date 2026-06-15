@@ -132,6 +132,82 @@ ZONING_PERMISSIONS = ("by_right", "conditional", "prohibited")
 # silently by-right). Surfaced as a warning by the fetcher.
 ZONING_DEFAULT_PERMISSION = "conditional"
 
+# ── Flood SFHA (GEO-8, FEMA National Flood Hazard Layer) ───────────────────────
+# NFHL "Flood Hazard Zones" polygon layer (S_FLD_HAZ_AR), national, so prefiltered
+# server-side to the county bbox + the SFHA where-clause, then clipped precisely to the
+# county polygon in DuckDB. Special Flood Hazard Areas are FLD_ZONE A%/V% (the SFHA_TF='T'
+# rows); these drive the parcel `sfha_flag` (a Stage-A exclusion) in enrichment (GEO-13).
+# Layer index 28, FLD_ZONE field and MaxRecordCount=2000 confirmed by the ticket; the
+# S_FLD_HAZ_AR field schema (FLD_ZONE/ZONE_SUBTY/SFHA_TF/FLD_AR_ID) is the stable NFHL
+# database spec. Endpoint env-overridable; a pre-staged local file (GeoJSON, 4326) can be
+# supplied via GEO_FLOOD_SOURCE for offline/air-gapped runs and tests.
+FLOOD_NFHL_URL = (
+    "https://hazards.fema.gov/gis/nfhl/rest/services/public/NFHL/MapServer/28"
+)
+FLOOD_URL_ENV = "GEO_FLOOD_URL"
+FLOOD_SOURCE_ENV = "GEO_FLOOD_SOURCE"               # pre-staged local file (GeoJSON, 4326)
+FLOOD_SOURCE_CRS_ENV = "GEO_FLOOD_SOURCE_CRS"
+FLOOD_ZONE_FIELDS = ("FLD_ZONE", "ZONE", "FLD_ZONE_1", "FLDZONE")
+FLOOD_SUBTYPE_FIELDS = ("ZONE_SUBTY", "ZONE_SUBTYPE", "SUBTYPE")
+FLOOD_SFHA_TF_FIELDS = ("SFHA_TF", "SFHA")
+FLOOD_ID_FIELDS = ("FLD_AR_ID", "OBJECTID", "OBJECTID_1", "DFIRM_ID", "GFID")
+# SFHA selection: FEMA defines Special Flood Hazard Areas as zones beginning A or V — EXCEPT
+# the FLD_ZONE value 'AREA NOT INCLUDED' (an unmapped area, NOT an SFHA, SFHA_TF='F'), which
+# the bare A%/V% prefix would wrongly catch. Pushed server-side (fewer features pulled) AND
+# re-applied in DuckDB (so the local-override path, which reads the whole file, filters
+# identically); the DuckDB pass additionally honours SFHA_TF='F' as authoritative-non-SFHA.
+FLOOD_ANI_VALUE = "AREA NOT INCLUDED"  # FLD_ZONE sentinel that is A%-prefixed but not SFHA
+FLOOD_SFHA_WHERE = (
+    "(FLD_ZONE LIKE 'A%' OR FLD_ZONE LIKE 'V%') AND FLD_ZONE <> 'AREA NOT INCLUDED'"
+)
+
+# ── CAISO interconnection queue + POI geolocation (GEO-7) ──────────────────────
+# `gridstatus.CAISO().get_interconnection_queue()` returns the published CAISO queue as a
+# pandas DataFrame (~2,274 rows). We materialize it to CSV (so the network path and the
+# local-override path share one DuckDB read path), filter to Kern County, geolocate each
+# project's POI by name-matching to the HIFLD substations (GEO-6) — which also supplies the
+# POI voltage (the queue itself carries no voltage column) — and precompute POI competition.
+# Standardized gridstatus column names (confirmed against the gridstatus CAISO source):
+# raw "Station or Transmission Line" → "Interconnection Location" (POI), "Utility" →
+# "Transmission Owner" (PTO), "Net MWs to Grid" → "Capacity (MW)". A pre-staged CSV can be
+# supplied via GEO_CAISO_QUEUE_SOURCE for offline/air-gapped runs and tests (gridstatus is
+# imported lazily only on the live path, so the suite needs neither the library nor network).
+CAISO_QUEUE_SOURCE_ENV = "GEO_CAISO_QUEUE_SOURCE"   # pre-staged CSV (gridstatus schema)
+# Candidate column names (resolved case-insensitively, first match wins) — robust to
+# gridstatus version drift and to a raw-export CSV that skipped standardization.
+CAISO_QUEUE_ID_FIELDS = ("Queue ID", "Queue Position", "queue_id")
+CAISO_NAME_FIELDS = ("Project Name", "Project Name - Confidential", "name")
+CAISO_TYPE_FIELDS = ("Generation Type", "Type-1", "type")
+CAISO_FUEL_FIELDS = ("Fuel-1", "Fuel", "fuel")
+CAISO_STATUS_FIELDS = ("Status", "Application Status", "status")
+CAISO_MW_FIELDS = ("Capacity (MW)", "Net MWs to Grid", "MW-1", "mw")
+CAISO_COUNTY_FIELDS = ("County", "county")
+CAISO_STATE_FIELDS = ("State", "state")
+CAISO_PTO_FIELDS = ("Transmission Owner", "Utility", "PTO")
+CAISO_POI_FIELDS = (
+    "Interconnection Location", "Station or Transmission Line",
+    "Point of Interconnection", "POI",
+)
+# The queue has no voltage column; this is a defensive fallback if a source ever adds one.
+# Otherwise POI voltage is inherited from the matched substation.
+CAISO_POI_VOLTAGE_FIELDS = ("Voltage (kV)", "POI Voltage (kV)", "Voltage", "kV")
+CAISO_QUEUE_DATE_FIELDS = ("Queue Date", "queue_date")
+CAISO_COMPLETION_FIELDS = ("Proposed Completion Date", "Current On-line Date")
+# County the app scopes to (the CAISO `County` column is a plain string).
+KERN_COUNTY_NAME = "Kern"
+# A queue project is "active" (counts toward competition) unless its status matches one of
+# these (case-insensitive substring) terminal/withdrawn states.
+CAISO_INACTIVE_STATUS_PATTERNS = (
+    "withdraw", "complete", "in service", "operational", "suspend", "deactiv", "cancel",
+)
+# POI competition is aggregated within this radius (meters, computed in EPSG:26911) of each
+# POI point: queued MW stacked on the same/nearby grid injection point.
+POI_COMPETITION_RADIUS_M = 10_000.0
+# Minimum normalized-name length for a *containment* (non-exact) POI↔substation match, so a
+# short generic token (e.g. a 1–3 char station name) can't false-match many unrelated POIs.
+# Exact matches are always allowed regardless of length.
+POI_MATCH_MIN_TOKEN_LEN = 4
+
 
 @dataclass(frozen=True)
 class Settings:

@@ -143,6 +143,25 @@ def test_bbox_sends_envelope_filter_params(tmp_path):
     assert captured["outSR"] == "4326"
 
 
+def test_where_clause_is_sent(tmp_path):
+    """A server-side attribute filter (e.g. the GEO-8 flood SFHA where-clause) must reach the
+    server as the `where` query param so the source is prefiltered, not pulled whole."""
+    captured = {}
+
+    def handler(request):
+        captured.update(dict(request.url.params))
+        return httpx.Response(200, json={"features": [_feature(0)], "exceededTransferLimit": False})
+
+    arcgis.fetch_featureserver_geojson(
+        "https://srv/MapServer/28", tmp_path / "p.geojson",
+        where="FLD_ZONE LIKE 'A%' OR FLD_ZONE LIKE 'V%'",
+        bbox=(-120.2, 34.7, -117.6, 35.8),
+        transport=httpx.MockTransport(handler),
+    )
+    assert captured["where"] == "FLD_ZONE LIKE 'A%' OR FLD_ZONE LIKE 'V%'"
+    assert captured["geometryType"] == "esriGeometryEnvelope"  # combined with the bbox prefilter
+
+
 def test_no_bbox_omits_envelope_filter_params(tmp_path):
     captured = {}
 
