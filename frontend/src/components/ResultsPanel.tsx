@@ -1,7 +1,9 @@
+import { ParcelDetail } from "./ParcelDetail";
+
 /**
- * Right results + detail pane (desktop) / bottom-sheet body (mobile). Scaffolding only —
- * no API endpoints exist yet (scoring is GEO-16+). Shows a results-list skeleton and a
- * detail placeholder so the layout is realistic.
+ * Right results + detail pane (desktop) / bottom-sheet body (mobile). The results list is a
+ * skeleton until scoring exists (GEO-16+); the detail section shows the selected parcel's
+ * quick attributes (GEO-26 select → detail).
  */
 export function ResultsPanel() {
   return (
@@ -20,10 +22,7 @@ export function ResultsPanel() {
 
       <section className="panel-section">
         <h2 className="panel-section__title">Detail</h2>
-        <p className="placeholder-text">
-          Select a parcel to see scoring detail. Detail rendering arrives with scoring
-          (GEO-16+).
-        </p>
+        <ParcelDetail />
       </section>
     </div>
   );

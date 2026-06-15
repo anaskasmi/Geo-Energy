@@ -1,9 +1,12 @@
+import { BasemapControl } from "./BasemapControl";
+import { LayerControl } from "./LayerControl";
+import { Legend } from "./Legend";
 import { ThemeToggle } from "./ThemeToggle";
 
 /**
- * Left control pane (desktop). Scaffolding only — real scoring controls/weights land in
- * later tickets (GEO-16+/GEO-24). For now it hosts the theme toggle and placeholder
- * sections so the layout and theming are exercised.
+ * Left control pane (desktop) / bottom-sheet body (mobile). Hosts the appearance + basemap
+ * controls, layer toggles (GEO-26), and the legend. Scoring criteria/weights land in
+ * GEO-16+/GEO-24.
  */
 export function Sidebar() {
   return (
@@ -19,13 +22,23 @@ export function Sidebar() {
       </section>
 
       <section className="panel-section">
-        <h2 className="panel-section__title">Filters</h2>
-        <p className="placeholder-text">Scoring criteria and weights will appear here.</p>
+        <h2 className="panel-section__title">Basemap</h2>
+        <BasemapControl />
       </section>
 
       <section className="panel-section">
         <h2 className="panel-section__title">Layers</h2>
-        <p className="placeholder-text">Parcels are loaded from PMTiles. More layers soon.</p>
+        <LayerControl />
+      </section>
+
+      <section className="panel-section">
+        <h2 className="panel-section__title">Legend</h2>
+        <Legend />
+      </section>
+
+      <section className="panel-section">
+        <h2 className="panel-section__title">Filters</h2>
+        <p className="placeholder-text">Scoring criteria and weights will appear here.</p>
       </section>
     </div>
   );

@@ -3,7 +3,9 @@ import { Protocol } from "pmtiles";
 
 import { PARCELS_PMTILES_URL } from "../config/env";
 import {
+  HIGHLIGHT_COLOR,
   PARCELS_FILL_LAYER,
+  PARCELS_HIGHLIGHT_LAYER,
   PARCELS_LINE_LAYER,
   PARCELS_SOURCE_ID,
   PARCELS_SOURCE_LAYER,
@@ -24,12 +26,12 @@ export function registerPmtilesProtocol(): void {
 }
 
 /**
- * Adds the parcels vector source + fill/line layers to the map's current style.
+ * Adds the parcels vector source + fill/line/highlight layers to the map's current style.
  *
- * Idempotent: returns early if the source already exists. The basemap style is swapped
- * on theme change (which wipes custom sources/layers), so this is re-run on every
- * `style.load`. Wrapped in try/catch so a missing/404 .pmtiles never hard-crashes the
- * app — the basemap still renders (GEO-14 has not produced a real archive yet).
+ * Idempotent: returns early if the source already exists. The basemap style is swapped on
+ * theme/basemap change (which wipes custom sources/layers), so this is re-run on every
+ * `style.load`. Wrapped in try/catch so a missing/404 .pmtiles never hard-crashes the app —
+ * the basemap still renders.
  */
 export function addParcelsLayer(map: maplibregl.Map): void {
   if (map.getSource(PARCELS_SOURCE_ID)) return;
@@ -44,10 +46,7 @@ export function addParcelsLayer(map: maplibregl.Map): void {
       type: "fill",
       source: PARCELS_SOURCE_ID,
       "source-layer": PARCELS_SOURCE_LAYER,
-      paint: {
-        "fill-color": "#2563eb",
-        "fill-opacity": 0.12,
-      },
+      paint: { "fill-color": "#2563eb", "fill-opacity": 0.12 },
     });
 
     map.addLayer({
@@ -55,14 +54,27 @@ export function addParcelsLayer(map: maplibregl.Map): void {
       type: "line",
       source: PARCELS_SOURCE_ID,
       "source-layer": PARCELS_SOURCE_LAYER,
-      paint: {
-        "line-color": "#2563eb",
-        "line-width": 0.6,
-        "line-opacity": 0.7,
-      },
+      paint: { "line-color": "#2563eb", "line-width": 0.6, "line-opacity": 0.7 },
+    });
+
+    // Selection highlight: a thick contrasting outline filtered to the selected parcel id.
+    // Starts matching nothing (id = -1) until a parcel is selected.
+    map.addLayer({
+      id: PARCELS_HIGHLIGHT_LAYER,
+      type: "line",
+      source: PARCELS_SOURCE_ID,
+      "source-layer": PARCELS_SOURCE_LAYER,
+      filter: ["==", ["get", "id"], -1],
+      paint: { "line-color": HIGHLIGHT_COLOR, "line-width": 2.5, "line-opacity": 0.95 },
     });
   } catch (err) {
     // Missing tiles / source-layer mismatch must not break the basemap render.
     console.warn("[parcels] failed to add layer", err);
   }
+}
+
+/** Highlight a parcel by id (or clear the highlight when id is null). */
+export function setSelectedParcel(map: maplibregl.Map, id: number | string | null): void {
+  if (!map.getLayer(PARCELS_HIGHLIGHT_LAYER)) return;
+  map.setFilter(PARCELS_HIGHLIGHT_LAYER, ["==", ["get", "id"], id ?? -1]);
 }

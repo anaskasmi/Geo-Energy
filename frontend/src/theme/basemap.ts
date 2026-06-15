@@ -1,77 +1,167 @@
-import type { StyleSpecification } from "maplibre-gl";
+import type { Map as MapLibreMap, StyleSpecification } from "maplibre-gl";
 
 import { HAS_MAPBOX_TOKEN, MAPBOX_TOKEN } from "../config/env";
 import type { ResolvedTheme } from "./theme";
 
+const BASEMAP_SOURCE_ID = "basemap";
+const BASEMAP_LAYER_ID = "basemap";
+const BACKGROUND_LAYER_ID = "background";
+
 /**
- * Builds a MapLibre basemap style for the given theme.
+ * Builds a MapLibre basemap style for the chosen basemap + app theme (GEO-22 + GEO-26).
  *
- * The basemap is intentionally "data-muted" (low-contrast, desaturated) so that data
- * overlays (parcels now; scores via deck.gl in GEO-24) stand out. It swaps with the app
- * theme: a light basemap for light mode, a dark basemap for dark mode.
+ * The basemap is intentionally "data-muted" (faded raster) so data overlays (parcels now;
+ * scores via deck.gl in GEO-24) read clearly. The user can pick a basemap explicitly
+ * (light / dark / streets / satellite) or leave it on "auto", which follows the app theme
+ * (light basemap in light mode, dark in dark mode).
  *
- * - If a Mapbox token is configured (VITE_MAPBOX_TOKEN), Mapbox's Light/Dark raster
- *   tiles are used.
- * - Otherwise we fall back to CARTO's free, token-less Positron / Dark Matter basemaps
- *   (also data-muted), so the map always renders without any credentials.
+ * All sources are token-less so the map always renders without credentials:
+ * - light/dark → CARTO Positron / Dark Matter (or Mapbox Light/Dark if VITE_MAPBOX_TOKEN set)
+ * - streets    → Esri World Street Map
+ * - satellite  → Esri World Imagery
  *
- * A background layer underneath guarantees the map shows a sensible color even if the
- * raster tiles fail to load (graceful degradation).
+ * A background layer underneath guarantees a sensible color even if tiles fail to load.
  */
+
+/** What the basemap control offers. "auto" tracks the app theme. */
+export type BasemapId = "auto" | "light" | "dark" | "streets" | "satellite";
+
+/** A basemap with an explicit raster source (auto resolves to light/dark first). */
+type ConcreteBasemap = "light" | "dark" | "streets" | "satellite";
 
 const CARTO_TILES: Record<ResolvedTheme, string> = {
   light: "https://basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
   dark: "https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
 };
 
+// Esri ArcGIS Online tiled basemaps — token-free, global CDN (reachable everywhere).
+const ESRI_IMAGERY =
+  "https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
+const ESRI_STREETS =
+  "https://services.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}";
+
+const ESRI_ATTRIB =
+  'Tiles &copy; <a href="https://www.esri.com/">Esri</a> &mdash; Esri, Maxar, Earthstar Geographics, and the GIS community';
+const CARTO_ATTRIB =
+  '&copy; <a href="https://carto.com/attributions">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
+const MAPBOX_ATTRIB =
+  '&copy; <a href="https://www.mapbox.com/about/maps/">Mapbox</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
+
 const BACKGROUND_COLOR: Record<ResolvedTheme, string> = {
   light: "#e9e6e1",
   dark: "#16181d",
 };
 
-const ATTRIBUTION: Record<ResolvedTheme, string> = {
-  light: HAS_MAPBOX_TOKEN
-    ? '&copy; <a href="https://www.mapbox.com/about/maps/">Mapbox</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-    : '&copy; <a href="https://carto.com/attributions">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-  dark: HAS_MAPBOX_TOKEN
-    ? '&copy; <a href="https://www.mapbox.com/about/maps/">Mapbox</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-    : '&copy; <a href="https://carto.com/attributions">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-};
-
-function basemapTileUrl(theme: ResolvedTheme): string {
-  if (HAS_MAPBOX_TOKEN) {
-    const styleId = theme === "dark" ? "dark-v11" : "light-v11";
-    return `https://api.mapbox.com/styles/v1/mapbox/${styleId}/tiles/256/{z}/{x}/{y}?access_token=${MAPBOX_TOKEN}`;
-  }
-  return CARTO_TILES[theme];
+interface RasterSource {
+  tiles: string;
+  attribution: string;
+  /** Faded so overlays read clearly; satellite stays a touch crisper. */
+  opacity: number;
+  /** Background under the raster (matches theme so gaps aren't jarring). */
+  background: string;
 }
 
-export function buildBaseStyle(theme: ResolvedTheme): StyleSpecification {
+function lightDarkSource(theme: ResolvedTheme): RasterSource {
+  if (HAS_MAPBOX_TOKEN) {
+    const styleId = theme === "dark" ? "dark-v11" : "light-v11";
+    return {
+      tiles: `https://api.mapbox.com/styles/v1/mapbox/${styleId}/tiles/256/{z}/{x}/{y}?access_token=${MAPBOX_TOKEN}`,
+      attribution: MAPBOX_ATTRIB,
+      opacity: 0.9,
+      background: BACKGROUND_COLOR[theme],
+    };
+  }
+  return {
+    tiles: CARTO_TILES[theme],
+    attribution: CARTO_ATTRIB,
+    opacity: 0.9,
+    background: BACKGROUND_COLOR[theme],
+  };
+}
+
+function resolveSource(basemap: ConcreteBasemap, theme: ResolvedTheme): RasterSource {
+  switch (basemap) {
+    case "streets":
+      return { tiles: ESRI_STREETS, attribution: ESRI_ATTRIB, opacity: 0.92, background: BACKGROUND_COLOR[theme] };
+    case "satellite":
+      return { tiles: ESRI_IMAGERY, attribution: ESRI_ATTRIB, opacity: 0.96, background: "#0b0d10" };
+    case "light":
+      return lightDarkSource("light");
+    case "dark":
+      return lightDarkSource("dark");
+  }
+}
+
+/** Resolve "auto" to the theme-driven light/dark basemap. */
+function concreteBasemap(basemap: BasemapId, theme: ResolvedTheme): ConcreteBasemap {
+  return basemap === "auto" ? theme : basemap;
+}
+
+export function buildBaseStyle(theme: ResolvedTheme, basemap: BasemapId = "auto"): StyleSpecification {
+  const src = resolveSource(concreteBasemap(basemap, theme), theme);
   return {
     version: 8,
     // Glyphs let us add text labels to overlays later without another style edit.
     glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
     sources: {
-      basemap: {
+      [BASEMAP_SOURCE_ID]: {
         type: "raster",
-        tiles: [basemapTileUrl(theme)],
+        tiles: [src.tiles],
         tileSize: 256,
-        attribution: ATTRIBUTION[theme],
+        attribution: src.attribution,
       },
     },
     layers: [
       {
-        id: "background",
+        id: BACKGROUND_LAYER_ID,
         type: "background",
-        paint: { "background-color": BACKGROUND_COLOR[theme] },
+        paint: { "background-color": src.background },
       },
       {
-        id: "basemap",
+        id: BASEMAP_LAYER_ID,
         type: "raster",
-        source: "basemap",
-        // Slightly fade the basemap so data overlays read clearly.
-        paint: { "raster-opacity": 0.9 },
+        source: BASEMAP_SOURCE_ID,
+        paint: { "raster-opacity": src.opacity },
       },
     ],
   };
+}
+
+/**
+ * Swap the basemap + background IN PLACE on theme/basemap change, leaving every data layer
+ * (parcels, selection highlight, the terra-draw drawing layers) untouched. This avoids a full
+ * `map.setStyle()`, which would wipe those layers — and in particular would force the drawing
+ * tool to be torn down and rebuilt, corrupting its undo history. The basemap raster source is
+ * removed + re-added (so its attribution updates too) and re-inserted just above the
+ * background, below all data layers.
+ */
+export function applyBasemap(map: MapLibreMap, basemap: BasemapId, theme: ResolvedTheme): void {
+  if (!map.isStyleLoaded()) return;
+  const src = resolveSource(concreteBasemap(basemap, theme), theme);
+
+  if (map.getLayer(BACKGROUND_LAYER_ID)) {
+    map.setPaintProperty(BACKGROUND_LAYER_ID, "background-color", src.background);
+  }
+  if (map.getLayer(BASEMAP_LAYER_ID)) map.removeLayer(BASEMAP_LAYER_ID);
+  if (map.getSource(BASEMAP_SOURCE_ID)) map.removeSource(BASEMAP_SOURCE_ID);
+
+  map.addSource(BASEMAP_SOURCE_ID, {
+    type: "raster",
+    tiles: [src.tiles],
+    tileSize: 256,
+    attribution: src.attribution,
+  });
+  // Insert above the background but below the first data layer so overlays stay on top.
+  const firstDataLayer = map
+    .getStyle()
+    .layers.find((l) => l.id !== BACKGROUND_LAYER_ID && l.id !== BASEMAP_LAYER_ID);
+  map.addLayer(
+    {
+      id: BASEMAP_LAYER_ID,
+      type: "raster",
+      source: BASEMAP_SOURCE_ID,
+      paint: { "raster-opacity": src.opacity },
+    },
+    firstDataLayer?.id,
+  );
 }

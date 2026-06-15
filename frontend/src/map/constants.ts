@@ -24,3 +24,8 @@ export const PARCELS_SOURCE_LAYER = "parcels";
 /** Layer ids derived from the parcels source. */
 export const PARCELS_FILL_LAYER = "parcels-fill";
 export const PARCELS_LINE_LAYER = "parcels-line";
+/** Outline layer that highlights the currently-selected parcel. */
+export const PARCELS_HIGHLIGHT_LAYER = "parcels-highlight";
+
+/** Highlight color for the selected parcel (contrasts with the blue parcel fill/line). */
+export const HIGHLIGHT_COLOR = "#f97316";

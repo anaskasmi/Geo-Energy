@@ -196,3 +196,239 @@
   -webkit-overflow-scrolling: touch;
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
+
+/* ── Segmented control (basemap selector) ─────────────────────────────────────── */
+.segmented {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 2px;
+  background: var(--bg-sunken);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.segmented__btn {
+  flex: 1 1 auto;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.segmented__btn[aria-pressed="true"] {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+
+/* ── Layer control ────────────────────────────────────────────────────────────── */
+.layer-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.layer-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.layer-row[data-available] {
+  opacity: 1;
+}
+.layer-row:not([data-available]) {
+  opacity: 0.6;
+}
+.layer-row__main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text);
+}
+.layer-row__label {
+  flex: 1 1 auto;
+}
+.layer-row__badge {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+.layer-row__note {
+  font-size: 11px;
+  color: var(--text-faint);
+  margin: 0 0 0 24px;
+}
+.layer-opacity {
+  width: 100%;
+  accent-color: var(--accent);
+}
+.layer-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1px solid var(--border-strong);
+  flex: 0 0 auto;
+}
+.layer-swatch[data-symbol="circle"] {
+  border-radius: 999px;
+}
+.layer-swatch[data-symbol="line"] {
+  height: 4px;
+  border-radius: 2px;
+}
+
+/* ── Legend ───────────────────────────────────────────────────────────────────── */
+.legend {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.legend__symbols {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.legend__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.legend__ramp {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.legend__ramp-bar {
+  flex: 1 1 auto;
+  height: 10px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+}
+.legend__ramp-label {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+/* ── Drawing toolbar (floats over the map) ────────────────────────────────────── */
+.draw-toolbar {
+  position: absolute;
+  top: calc(12px + env(safe-area-inset-top, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  max-width: calc(100% - 24px);
+  flex-wrap: wrap;
+  justify-content: center;
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+}
+.draw-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 9px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+.draw-btn--icon {
+  padding: 5px 8px;
+  font-size: 14px;
+  line-height: 1;
+}
+.draw-btn[aria-pressed="true"] {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+.draw-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.draw-sep {
+  width: 1px;
+  align-self: stretch;
+  margin: 2px 2px;
+  background: var(--border);
+}
+.draw-area {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  padding: 0 6px;
+  white-space: nowrap;
+}
+
+/* ── Selected-parcel detail ───────────────────────────────────────────────────── */
+.parcel-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.parcel-detail__grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 12px;
+  margin: 0;
+}
+.parcel-detail__grid dt {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.parcel-detail__grid dd {
+  margin: 0;
+  font-weight: 600;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.parcel-detail__clear {
+  align-self: flex-start;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-sunken);
+  color: var(--text);
+  font-size: 12px;
+}
+
+/* ── Parcel hover popup (MapLibre) ────────────────────────────────────────────── */
+.parcel-popup .maplibregl-popup-content {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+.parcel-popup .maplibregl-popup-content span {
+  color: var(--text-muted);
+  margin-left: 4px;
+}
+.parcel-popup .maplibregl-popup-tip {
+  border-top-color: var(--surface);
+  border-bottom-color: var(--surface);
+}
