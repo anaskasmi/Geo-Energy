@@ -48,6 +48,10 @@ export class DrawController {
   private readonly cb: DrawControllerCallbacks;
   private draw: TerraDraw;
   private selectedId: FeatureId | null = null;
+  // While true, terra-draw "change" events update only the area readout and DON'T fire onGeometry
+  // — used by setGeometry() to inject an externally-hydrated polygon without echoing it back into
+  // the store (which is already the source of that geometry) and looping.
+  private suppressEmit = false;
 
   constructor(map: maplibregl.Map, cb: DrawControllerCallbacks) {
     this.map = map;
@@ -55,11 +59,14 @@ export class DrawController {
     this.draw = this.create();
     this.draw.start();
     this.wire();
-    // Fresh instance → empty undo/redo history + nothing selected. Reset the UI state so a
-    // recreate (after a basemap/theme swap) can't leave stale enabled buttons.
+    // Fresh instance → empty undo/redo history + nothing selected. Reset that UI state so a
+    // recreate (after a basemap/theme swap) can't leave stale enabled buttons. Do NOT reset the
+    // geometry here: the store's drawnPolygon is the scoring source of truth and may have been
+    // hydrated from a shared URL / saved analysis (GEO-31) BEFORE this async style.load runs —
+    // emitting null would clobber it and a shared link would never score. terra-draw starts empty
+    // regardless; user draw/edit/clear emit geometry changes from then on.
     this.cb.onHistory(false, false);
     this.cb.onSelection(false);
-    this.cb.onGeometry(null);
   }
 
   private create(): TerraDraw {
@@ -133,7 +140,40 @@ export class DrawController {
       total += area(feature as never);
     }
     this.cb.onArea(total > 0 ? total : null);
-    this.emitGeometry();
+    if (!this.suppressEmit) this.emitGeometry();
+  }
+
+  /**
+   * Render an externally-supplied geometry (a URL/saved/example hydration, GEO-31) as editable
+   * terra-draw feature(s), so the shared search area is visible AND editable — WITHOUT echoing
+   * back through onGeometry (the store already holds this geometry; emitting would loop). Splits a
+   * MultiPolygon into one polygon Feature each; terra-draw assigns ids and validates the geometry.
+   */
+  setGeometry(geom: DrawnGeometry | null): void {
+    this.suppressEmit = true;
+    try {
+      this.draw.clear();
+      this.selectedId = null;
+      if (geom) {
+        const rings =
+          geom.type === "MultiPolygon"
+            ? (geom.coordinates as number[][][][])
+            : [geom.coordinates as number[][][]];
+        const features = rings.map((coordinates) => ({
+          type: "Feature" as const,
+          geometry: { type: "Polygon" as const, coordinates },
+          properties: { mode: "polygon" },
+        }));
+        this.draw.addFeatures(features as never);
+      }
+      let total = 0;
+      for (const feature of this.polygons()) total += area(feature as never);
+      this.cb.onArea(total > 0 ? total : null);
+      this.cb.onHistory(false, false);
+      this.cb.onSelection(false);
+    } finally {
+      this.suppressEmit = false;
+    }
   }
 
   /** Surface the drawn area to React: one Polygon, or a MultiPolygon when several are drawn. */

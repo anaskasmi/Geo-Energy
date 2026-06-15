@@ -1,5 +1,9 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
+import { apiClient } from "../api/client";
+import type { ContextResponse } from "../api/client";
+import { copyText, parcelSummaryText } from "../export/clipboard";
+import { exportParcelPdf } from "../export/pdf";
 import { scoreColorCss, scoreTextColor } from "../map/layers";
 import { useMapStore } from "../map/useMapStore";
 import { useExplain } from "../results/hooks";
@@ -20,10 +24,47 @@ const EXCLUSION_LABELS: Record<string, string> = {
  * unavailable.
  */
 export function ParcelDetail() {
-  const { selected, setSelected, useCase } = useMapStore();
+  const { selected, setSelected, useCase, captureMapSnapshot } = useMapStore();
   const { data, loading, error } = useExplain(selected?.id ?? null, useCase);
   const placeholderRef = useRef<HTMLParagraphElement | null>(null);
   const clearedRef = useRef(false);
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const [actionMsg, setActionMsg] = useState<string | null>(null);
+
+  const flash = (msg: string) => {
+    setActionMsg(msg);
+    window.setTimeout(() => setActionMsg(null), 2000);
+  };
+
+  const onCopySummary = async () => {
+    if (!selected) return;
+    const ok = await copyText(parcelSummaryText(selected, data));
+    flash(ok ? "Summary copied to clipboard" : "Couldn't copy the summary");
+  };
+
+  const onExportPdf = async () => {
+    if (!selected) return;
+    setPdfBusy(true);
+    let context: ContextResponse | null = null;
+    try {
+      context = await apiClient.context();
+    } catch {
+      context = null; // grid context is optional; the PDF notes it's unavailable
+    }
+    try {
+      await exportParcelPdf({
+        selected,
+        useCase,
+        explain: data,
+        context,
+        snapshot: captureMapSnapshot(),
+      });
+    } catch {
+      flash("Couldn't generate the PDF");
+    } finally {
+      setPdfBusy(false);
+    }
+  };
 
   // After "Clear selection", move focus to the placeholder so keyboard users aren't dropped.
   useEffect(() => {
@@ -63,7 +104,14 @@ export function ParcelDetail() {
         )}
       </div>
 
-      {loading && <p className="placeholder-text">Loading breakdown…</p>}
+      {loading && (
+        <div className="detail-skeleton" aria-hidden="true">
+          <span className="skeleton skeleton--line" />
+          <span className="skeleton skeleton--line" />
+          <span className="skeleton skeleton--short" />
+          <span className="skeleton skeleton--line" />
+        </div>
+      )}
       {error && <p className="error-text">{error}</p>}
 
       {data && (
@@ -116,6 +164,26 @@ export function ParcelDetail() {
             ))}
           </ul>
         </>
+      )}
+
+      <div className="parcel-detail__actions">
+        <button type="button" className="panel-btn" onClick={onCopySummary}>
+          Copy summary
+        </button>
+        <button
+          type="button"
+          className="panel-btn"
+          onClick={onExportPdf}
+          disabled={pdfBusy}
+          aria-busy={pdfBusy}
+        >
+          {pdfBusy ? "Preparing PDF…" : "Download PDF"}
+        </button>
+      </div>
+      {actionMsg && (
+        <p className="share-control__note" role="status" aria-live="polite">
+          {actionMsg}
+        </p>
       )}
 
       <button

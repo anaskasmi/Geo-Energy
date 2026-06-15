@@ -1093,3 +1093,357 @@ kbd {
 .chat-note code {
   font-size: 10px;
 }
+
+/* ── Shared panel button (GEO-31/32 new controls) ─────────────────────────────── */
+.panel-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-sunken);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+}
+.panel-btn:hover:not(:disabled),
+.panel-btn:focus-visible {
+  border-color: var(--accent);
+}
+.panel-btn--primary {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  border-color: var(--accent);
+}
+.panel-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* ── Share / save / export control (sidebar, GEO-31) ──────────────────────────── */
+.share-control {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.share-control__row {
+  display: flex;
+  gap: 6px;
+}
+.share-control__row .panel-btn {
+  flex: 1 1 auto;
+}
+.share-control__save {
+  display: flex;
+  gap: 6px;
+}
+.share-control__save input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-sunken);
+  color: var(--text);
+  font-size: 12px;
+}
+.share-control__note {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.saved-list {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.saved-list__item {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--bg-sunken);
+}
+.saved-list__load {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  padding: 6px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  font-size: 12px;
+}
+.saved-list__load:hover,
+.saved-list__load:focus-visible {
+  background: var(--bg-elevated);
+}
+.saved-list__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.saved-list__date {
+  flex: 0 0 auto;
+  font-size: 10px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+.saved-list__delete {
+  flex: 0 0 auto;
+  min-width: 28px;
+  border: 0;
+  border-left: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 12px;
+}
+.saved-list__delete:hover,
+.saved-list__delete:focus-visible {
+  color: #dc2626;
+  background: var(--bg-elevated);
+}
+
+/* ── Per-parcel detail actions (GEO-31) ───────────────────────────────────────── */
+.parcel-detail__actions {
+  display: flex;
+  gap: 6px;
+}
+.parcel-detail__actions .panel-btn {
+  flex: 1 1 auto;
+}
+.detail-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* ── Empty state with example CTA (GEO-32) ────────────────────────────────────── */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 14px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 8px;
+  background: var(--bg-sunken);
+}
+.empty-state__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.empty-state__hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+/* ── Inline scoring progress + skeleton rows (GEO-32) ─────────────────────────── */
+.score-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--accent);
+  margin-bottom: 10px;
+}
+.score-progress__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--accent);
+  animation: score-pulse 1s ease-in-out infinite;
+}
+@keyframes score-pulse {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+.skeleton {
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+@keyframes skeleton-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+.skeleton-row {
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+}
+.skeleton-row__chip {
+  width: 30px;
+  height: 24px;
+  border-radius: 6px;
+  flex: 0 0 auto;
+}
+.skeleton-row__body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1 1 auto;
+}
+
+/* ── Specific error card with recovery action (GEO-32 #10) ────────────────────── */
+.error-card {
+  padding: 12px;
+  border-radius: 8px;
+  background: color-mix(in srgb, #dc2626 10%, transparent);
+  border: 1px solid color-mix(in srgb, #dc2626 35%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.error-card__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.error-card__detail {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+.error-card .panel-btn {
+  align-self: flex-start;
+}
+
+/* ── Map data-layer notice (GEO-32 #10/#12) ───────────────────────────────────── */
+.map-notice {
+  position: absolute;
+  left: 50%;
+  bottom: calc(28px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 8;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(440px, calc(100% - 24px));
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--text);
+  background: color-mix(in srgb, var(--surface) 97%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+}
+.map-notice__close {
+  flex: 0 0 auto;
+  min-width: 24px;
+  min-height: 24px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+/* ── First-run coachmarks (GEO-32 #7) ─────────────────────────────────────────── */
+.coachmark {
+  position: fixed;
+  left: 50%;
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 90;
+  width: min(380px, calc(100% - 32px));
+  padding: 16px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+}
+.coachmark__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.coachmark__step {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+}
+.coachmark__close {
+  min-width: 28px;
+  min-height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+.coachmark__close:hover,
+.coachmark__close:focus-visible {
+  background: var(--bg-sunken);
+}
+.coachmark__title {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+.coachmark__body {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin-bottom: 14px;
+}
+.coachmark__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.coachmark__skip {
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  padding: 6px 4px;
+}
+.coachmark__skip:hover,
+.coachmark__skip:focus-visible {
+  color: var(--text);
+}
+.coachmark__nav {
+  display: flex;
+  gap: 6px;
+}
+
+/* Comfortable touch targets for the new controls on coarse pointers (WCAG 2.5.8). */
+@media (pointer: coarse) {
+  .panel-btn,
+  .saved-list__load,
+  .coachmark__skip {
+    min-height: 44px;
+  }
+  .saved-list__delete,
+  .coachmark__close,
+  .map-notice__close {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}

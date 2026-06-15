@@ -1,11 +1,13 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { CSSProperties, KeyboardEvent, PointerEvent } from "react";
 
 import { useIsDesktop } from "../hooks/useBreakpoint";
 import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts";
 import { MapView } from "../map/MapView";
 import { useScoring } from "../results/useScoring";
+import { useUrlState } from "../state/useUrlState";
 import { BottomSheet } from "./BottomSheet";
+import { Coachmarks, hasSeenTour } from "./Coachmarks";
 import { DrawFab } from "./DrawFab";
 import { DrawToolbar } from "./DrawToolbar";
 import { ResultsPanel } from "./ResultsPanel";
@@ -68,8 +70,20 @@ function loadWidths(): { left: number; right: number } {
 export function AppShell() {
   const isDesktop = useIsDesktop();
   useScoring(); // debounced score of the drawn polygon (GEO-24); mounted once here
+  useUrlState(); // hydrate from + mirror to the URL hash (GEO-31); mounted once here
   const [helpOpen, setHelpOpen] = useState(false);
   useKeyboardShortcuts(useCallback(() => setHelpOpen((o) => !o), []));
+
+  // First-run onboarding (GEO-32): open the tour once, after the shell has painted.
+  const [tourOpen, setTourOpen] = useState(false);
+  useEffect(() => {
+    if (!hasSeenTour()) {
+      const timer = window.setTimeout(() => setTourOpen(true), 600);
+      return () => window.clearTimeout(timer);
+    }
+  }, []);
+  const startTour = useCallback(() => setTourOpen(true), []);
+  const closeTour = useCallback(() => setTourOpen(false), []);
 
   const [widths, setWidths] = useState(loadWidths);
   const drag = useRef<{ side: "left" | "right"; startX: number; startW: number } | null>(null);
@@ -129,7 +143,7 @@ export function AppShell() {
       <>
         <div className="shell shell--desktop" style={style}>
           <aside className="pane pane--left">
-            <Sidebar />
+            <Sidebar onStartTour={startTour} />
           </aside>
           <div
             className="resize-handle"
@@ -170,6 +184,7 @@ export function AppShell() {
           </aside>
         </div>
         <ShortcutSheet open={helpOpen} onClose={() => setHelpOpen(false)} />
+        <Coachmarks open={tourOpen} onClose={closeTour} />
       </>
     );
   }
@@ -184,10 +199,11 @@ export function AppShell() {
         <ThemeToggle />
       </div>
       <BottomSheet>
-        <Sidebar />
+        <Sidebar onStartTour={startTour} />
         <ResultsPanel />
       </BottomSheet>
       <DrawFab />
+      <Coachmarks open={tourOpen} onClose={closeTour} />
     </div>
   );
 }

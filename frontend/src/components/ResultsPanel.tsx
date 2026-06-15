@@ -1,11 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { placeGeometry } from "../agent/mockAgent";
 import type { ScoredFeature } from "../api/client";
+import type { ErrorAction } from "../api/errors";
 import { scoreColorCss, scoreTextColor } from "../map/layers";
 import { useMapStore } from "../map/useMapStore";
 import { SORTS, dominantReasons, fmtAcres, fmtKv, fmtMeters } from "../results/format";
 import { useContextSummary } from "../results/hooks";
+import { geometryCenter } from "../state/shareState";
 import { haptic } from "../utils/haptics";
+import { EmptyState } from "./EmptyState";
 import { ParcelDetail } from "./ParcelDetail";
 
 interface Filters {
@@ -25,7 +29,18 @@ const displayMax = (n: number) => (Number.isFinite(n) ? String(n) : "");
  * Selecting a row highlights + flies to the parcel on the map (and vice-versa).
  */
 export function ResultsPanel() {
-  const { scoreResult, scoreStatus, scoreError, selected, setSelected, flyTo } = useMapStore();
+  const {
+    scoreResult,
+    scoreStatus,
+    scoreError,
+    scoreErrorAction,
+    selected,
+    setSelected,
+    setUseCase,
+    setDrawnPolygon,
+    retryScore,
+    flyTo,
+  } = useMapStore();
   const context = useContextSummary();
   const [sortKey, setSortKey] = useState("score");
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
@@ -68,6 +83,15 @@ export function ResultsPanel() {
     );
 
   const compared = features.filter((f) => compareIds.includes(f.properties.id));
+
+  // Wire a small demo area near Mojave (GEO-32 #8 example CTA) → triggers scoring via useScoring.
+  const tryExample = () => {
+    const geom = placeGeometry("mojave");
+    setUseCase("utility_solar");
+    setDrawnPolygon(geom);
+    const center = geometryCenter(geom);
+    if (center) flyTo(center, 10);
+  };
 
   // GEO-28: a screen-reader-only, polite live region. Announces scoring state + a textual
   // equivalent of the (visual) ranked results — the non-visual path to the same information.
@@ -122,12 +146,34 @@ export function ResultsPanel() {
         )}
 
         {scoreStatus === "idle" && (
-          <p className="placeholder-text">Draw an area on the map to score the parcels inside it.</p>
+          <EmptyState
+            title="No area scored yet"
+            hint="Draw a search area on the map to score the parcels inside it — or try an example near Mojave."
+            action={{ label: "Try an example", onClick: tryExample }}
+          />
         )}
-        {scoreStatus === "scoring" && <p className="results-status">Scoring…</p>}
-        {scoreStatus === "error" && <p className="error-text">{scoreError ?? "Scoring failed."}</p>}
+        {scoreStatus === "scoring" && (
+          <>
+            <p className="score-progress" role="status">
+              <span className="score-progress__dot" aria-hidden="true" />
+              {features.length > 0 ? "Updating scores…" : "Scoring parcels…"}
+            </p>
+            {features.length === 0 && <SkeletonRows count={5} />}
+          </>
+        )}
+        {scoreStatus === "error" && (
+          <ScoreErrorCard
+            detail={scoreError ?? "Scoring failed."}
+            action={scoreErrorAction}
+            onRetry={retryScore}
+          />
+        )}
         {scoreStatus === "done" && features.length === 0 && (
-          <p className="placeholder-text">No parcels passed the screen in the drawn area.</p>
+          <EmptyState
+            title="No parcels passed the screen"
+            hint="Nothing in this area meets the screen. Try a larger area, a different use case, or relaxed filters — or load an example."
+            action={{ label: "Try an example", onClick: tryExample }}
+          />
         )}
 
         {features.length > 0 && (
@@ -240,6 +286,52 @@ export function ResultsPanel() {
         <h2 className="panel-section__title">Detail</h2>
         <ParcelDetail />
       </section>
+    </div>
+  );
+}
+
+/** Placeholder result rows while the first score is in flight (GEO-32 #9). */
+function SkeletonRows({ count }: { count: number }) {
+  return (
+    <ul className="results-list" aria-hidden="true">
+      {Array.from({ length: count }).map((_, i) => (
+        <li key={i} className="results-row skeleton-row">
+          <span className="skeleton skeleton-row__chip" />
+          <span className="skeleton-row__body">
+            <span className="skeleton skeleton--line" />
+            <span className="skeleton skeleton--short" />
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Specific, actionable scoring error with a recovery affordance (GEO-32 #10). */
+function ScoreErrorCard({
+  detail,
+  action,
+  onRetry,
+}: {
+  detail: string;
+  action: ErrorAction | null;
+  onRetry: () => void;
+}) {
+  const title =
+    action === "smaller"
+      ? "Search area is too large"
+      : action === "retry"
+        ? "Couldn't complete scoring"
+        : "Scoring failed";
+  return (
+    <div className="error-card" role="alert">
+      <p className="error-card__title">{title}</p>
+      <p className="error-card__detail">{detail}</p>
+      {action === "retry" && (
+        <button type="button" className="panel-btn panel-btn--primary" onClick={onRetry}>
+          Retry
+        </button>
+      )}
     </div>
   );
 }

@@ -7,7 +7,7 @@ import type { Feature } from "geojson";
 import type { ScoredFeature, ScoredFeatureProps } from "../api/client";
 import { applyBasemap, buildBaseStyle } from "../theme/basemap";
 import { useTheme } from "../theme/useTheme";
-import { MAP_CENTER, MAP_ZOOM, PARCELS_FILL_LAYER } from "./constants";
+import { MAP_CENTER, MAP_ZOOM, PARCELS_FILL_LAYER, PARCELS_SOURCE_ID } from "./constants";
 import { DrawController } from "./DrawController";
 import { applyLayerState, RESULT_LAYER_ID, scoreColor } from "./layers";
 import type { ParcelInfo } from "./MapContext";
@@ -66,15 +66,20 @@ export function MapView() {
     selected,
     drawMode,
     scoreResult,
+    drawnPolygon,
+    layerError,
     setSelected,
     setDrawMode,
     setDrawAreaSqm,
     setDrawHistory,
     setCanDeleteSelection,
     setDrawnPolygon,
+    setLayerError,
     registerDrawApi,
     registerFlyTo,
+    registerMapSnapshot,
   } = store;
+  const [layerNoticeDismissed, setLayerNoticeDismissed] = useState(false);
 
   // Refs so the once-registered map handlers read the latest state without re-binding.
   const layersRef = useRef(layers);
@@ -87,6 +92,13 @@ export function MapView() {
   basemapRef.current = basemap;
   const themeRef = useRef(resolvedTheme);
   themeRef.current = resolvedTheme;
+  // Latest drawn polygon, for the once-bound map handlers + the inject effect below.
+  const drawnPolygonRef = useRef(drawnPolygon);
+  drawnPolygonRef.current = drawnPolygon;
+  // The exact geometry object terra-draw last emitted. The inject effect compares by reference to
+  // tell a user-draw (already in terra-draw) from an EXTERNAL hydration (URL/saved/example) that
+  // must be pushed INTO terra-draw — so it injects once and never echoes into a loop (GEO-31).
+  const lastFromDrawRef = useRef<object | null>(null);
 
   // Initialize the map exactly once.
   useEffect(() => {
@@ -101,6 +113,9 @@ export function MapView() {
       center: MAP_CENTER,
       zoom: MAP_ZOOM,
       attributionControl: { compact: true },
+      // Keep the WebGL backbuffer so map.getCanvas().toDataURL() works for the PDF snapshot
+      // (GEO-31 #5). Small memory cost; required for an off-frame canvas read.
+      preserveDrawingBuffer: true,
     });
     mapRef.current = map;
 
@@ -132,6 +147,16 @@ export function MapView() {
       else map.flyTo({ ...target, duration: 800, essential: true });
     });
 
+    // Expose a production-safe map snapshot for the per-parcel PDF (GEO-31 #5). Best-effort:
+    // returns null if the read fails (e.g. canvas tainted) rather than throwing.
+    registerMapSnapshot(() => {
+      try {
+        return map.getCanvas().toDataURL("image/png");
+      } catch {
+        return null;
+      }
+    });
+
     // Add parcels + the drawing tool once the style loads. The basemap/theme effect swaps the
     // basemap IN PLACE (no setStyle), so these data layers + the draw controller persist and
     // style.load fires only once — the drawing's undo history is never corrupted by a rebuild.
@@ -144,7 +169,11 @@ export function MapView() {
           onArea: setDrawAreaSqm,
           onHistory: setDrawHistory,
           onSelection: setCanDeleteSelection,
-          onGeometry: setDrawnPolygon,
+          onGeometry: (g) => {
+            // Remember terra-draw's own emission so the inject effect won't push it straight back.
+            lastFromDrawRef.current = g;
+            setDrawnPolygon(g);
+          },
         });
         registerDrawApi({
           undo: () => drawRef.current?.undo(),
@@ -153,6 +182,11 @@ export function MapView() {
           deleteSelected: () => drawRef.current?.deleteSelected(),
         });
         drawRef.current.setMode(drawModeRef.current);
+        // A geometry hydrated from the URL/saved/example BEFORE the draw tool existed: render it
+        // now as an editable outline (the store already holds it as the scoring source of truth).
+        if (drawnPolygonRef.current && drawnPolygonRef.current !== lastFromDrawRef.current) {
+          drawRef.current.setGeometry(drawnPolygonRef.current as never);
+        }
       }
       // deck.gl overlay for scored parcels (GEO-24), overlaid above the MapLibre canvas so it
       // never disturbs the parcels/draw layers. Created once; updated via setProps below.
@@ -244,9 +278,18 @@ export function MapView() {
     // A pan/drag cancels a pending long-press (so it can't fire at a now-stale coordinate).
     map.on("dragstart", clearLp);
 
-    // Swallow source/tile errors (e.g. a missing parcels .pmtiles) so the basemap stays.
+    // Swallow source/tile errors (e.g. a missing parcels .pmtiles) so the basemap stays, and
+    // surface a single user-facing notice when the parcels data layer fails (GEO-32 #10/#12).
     map.on("error", (event) => {
       console.warn("[map] error:", event.error?.message ?? event.error ?? event);
+      const sourceId = (event as unknown as { sourceId?: string }).sourceId;
+      if (sourceId === PARCELS_SOURCE_ID) setLayerError(true);
+    });
+    // Clear the notice once the parcels source loads successfully, so a transient tile/network
+    // blip doesn't permanently latch a false "unavailable" message (GEO-32 #10/#12).
+    map.on("sourcedata", (event) => {
+      const e = event as unknown as { sourceId?: string; isSourceLoaded?: boolean };
+      if (e.sourceId === PARCELS_SOURCE_ID && e.isSourceLoaded) setLayerError(false);
     });
 
     const resizeObserver = new ResizeObserver(() => map.resize());
@@ -264,6 +307,7 @@ export function MapView() {
       drawRef.current = null;
       registerDrawApi(null);
       registerFlyTo(null);
+      registerMapSnapshot(null);
       if (overlayRef.current) {
         map.removeControl(overlayRef.current as unknown as maplibregl.IControl);
         overlayRef.current = null;
@@ -307,6 +351,16 @@ export function MapView() {
     const map = mapRef.current;
     if (map) map.getCanvas().style.cursor = drawMode === "draw" ? "crosshair" : "";
   }, [drawMode]);
+
+  // Render an EXTERNAL geometry (URL/saved/example hydration) into terra-draw so the shared search
+  // area is visible + editable (GEO-31). Reference-compared against terra-draw's own last emission
+  // so a user-draw isn't re-injected (no echo loop); setGeometry doesn't fire onGeometry. The
+  // controller may not exist yet on first hydration — the creation block handles that case.
+  useEffect(() => {
+    if (drawnPolygon !== lastFromDrawRef.current) {
+      drawRef.current?.setGeometry((drawnPolygon ?? null) as never);
+    }
+  }, [drawnPolygon]);
 
   // Dismiss the context menu on Escape or a click/tap outside it (GEO-30).
   useEffect(() => {
@@ -378,6 +432,22 @@ export function MapView() {
   return (
     <>
       <div ref={containerRef} className="map-view" aria-label="Map" role="region" />
+      {layerError && !layerNoticeDismissed && (
+        <div className="map-notice" role="status">
+          <span>
+            <strong>Map data layer is unavailable.</strong> Parcel outlines couldn&apos;t load — the
+            basemap and scoring still work.
+          </span>
+          <button
+            type="button"
+            className="map-notice__close"
+            aria-label="Dismiss"
+            onClick={() => setLayerNoticeDismissed(true)}
+          >
+            ✕
+          </button>
+        </div>
+      )}
       {ctxMenu && (
         <ul className="map-context-menu" style={{ left: ctxMenu.x, top: ctxMenu.y }} role="menu" aria-label="Map actions">
           <li role="none">
