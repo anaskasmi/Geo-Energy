@@ -137,12 +137,14 @@ ZONING_DEFAULT_PERMISSION = "conditional"
 # server-side to the county bbox + the SFHA where-clause, then clipped precisely to the
 # county polygon in DuckDB. Special Flood Hazard Areas are FLD_ZONE A%/V% (the SFHA_TF='T'
 # rows); these drive the parcel `sfha_flag` (a Stage-A exclusion) in enrichment (GEO-13).
-# Layer index 28, FLD_ZONE field and MaxRecordCount=2000 confirmed by the ticket; the
-# S_FLD_HAZ_AR field schema (FLD_ZONE/ZONE_SUBTY/SFHA_TF/FLD_AR_ID) is the stable NFHL
-# database spec. Endpoint env-overridable; a pre-staged local file (GeoJSON, 4326) can be
-# supplied via GEO_FLOOD_SOURCE for offline/air-gapped runs and tests.
+# Confirmed live 2026-06-15 (from a US egress; the host geo-blocks non-US IPs at its WAF):
+# layer 28 = "Flood Hazard Zones" (polygon), maxRecordCount=2000, fields FLD_ZONE/ZONE_SUBTY/
+# SFHA_TF/FLD_AR_ID all present. NB the public REST root is /arcgis/rest/services, NOT
+# /gis/nfhl/rest/services (the latter 404s via FEMA's WebSEAL gateway). Endpoint
+# env-overridable; a pre-staged local file (GeoJSON, 4326) can be supplied via
+# GEO_FLOOD_SOURCE for offline/air-gapped runs and tests.
 FLOOD_NFHL_URL = (
-    "https://hazards.fema.gov/gis/nfhl/rest/services/public/NFHL/MapServer/28"
+    "https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer/28"
 )
 FLOOD_URL_ENV = "GEO_FLOOD_URL"
 FLOOD_SOURCE_ENV = "GEO_FLOOD_SOURCE"               # pre-staged local file (GeoJSON, 4326)
