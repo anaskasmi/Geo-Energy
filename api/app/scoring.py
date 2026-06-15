@@ -321,9 +321,10 @@ def build_score_sql(
       * ``polygon=True``  -> ``ST_Intersects(geom, ST_GeomFromGeoJSON($poly))`` (R-tree prefilter)
       * ``parcel_id=True`` -> ``id = $parcel_id`` (single parcel, for /explain; no Stage-A filter)
 
-    The drawn polygon and all scalar thresholds are BOUND parameters (``$name``). Weights and
-    factor domains are server-validated numbers inlined into the arithmetic. Prohibited zone
-    codes are validated against :data:`_ZONE_CODE_RE` then inlined as quoted literals.
+    The drawn polygon / ``parcel_id`` and the ``limit``/``offset`` are BOUND parameters (``$name``).
+    Scalar thresholds, weights and factor domains are server-validated numbers (each ``float()``-cast
+    / range-checked) inlined into the arithmetic — NOT bound parameters. Prohibited zone codes are
+    validated against :data:`_ZONE_CODE_RE` then inlined as quoted literals.
 
     For /explain (parcel_id) Stage-A is reported, not applied, so the breakdown can show which
     exclusions a specific parcel fails; for /score (polygon) Stage-A is a hard outer filter.
