@@ -2,20 +2,31 @@ import type { ScoredFeature } from "../api/client";
 
 /** Display helpers + plain-language summaries for the results panel (GEO-25). */
 
-export function fmtAcres(n: number | null | undefined): string {
+/** Coerce a value to a finite number, else null — so a formatter never throws on a stray
+ *  string/NaN (the API contract is numbers, but display code stays robust regardless). */
+function num(v: unknown): number | null {
+  const n = typeof v === "number" ? v : v == null ? NaN : Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+export function fmtAcres(value: number | null | undefined): string {
+  const n = num(value);
   return n == null ? "—" : `${n.toFixed(n >= 100 ? 0 : 1)} ac`;
 }
 
-export function fmtMeters(n: number | null | undefined): string {
+export function fmtMeters(value: number | null | undefined): string {
+  const n = num(value);
   if (n == null) return "—";
   return n >= 1000 ? `${(n / 1000).toFixed(1)} km` : `${Math.round(n)} m`;
 }
 
-export function fmtKv(n: number | null | undefined): string {
+export function fmtKv(value: number | null | undefined): string {
+  const n = num(value);
   return n == null ? "n/a" : `${Math.round(n)} kV`;
 }
 
-export function fmtNum(n: number | null | undefined, unit = ""): string {
+export function fmtNum(value: number | null | undefined, unit = ""): string {
+  const n = num(value);
   if (n == null) return "—";
   const v = Math.abs(n) >= 100 ? n.toFixed(0) : n.toFixed(1);
   return unit ? `${v} ${unit}` : v;

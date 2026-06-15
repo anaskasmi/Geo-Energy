@@ -5,6 +5,7 @@ import { scoreColorCss, scoreTextColor } from "../map/layers";
 import { useMapStore } from "../map/useMapStore";
 import { SORTS, dominantReasons, fmtAcres, fmtKv, fmtMeters } from "../results/format";
 import { useContextSummary } from "../results/hooks";
+import { haptic } from "../utils/haptics";
 import { ParcelDetail } from "./ParcelDetail";
 
 interface Filters {
@@ -57,6 +58,7 @@ export function ResultsPanel() {
 
   const select = (f: ScoredFeature) => {
     const p = f.properties;
+    haptic(8); // GEO-29: confirm the tap on touch devices (no-op on desktop)
     setSelected({ id: p.id, apn: p.apn, acres: p.acres });
     if (p.centroid) flyTo(p.centroid);
   };
@@ -67,9 +69,29 @@ export function ResultsPanel() {
 
   const compared = features.filter((f) => compareIds.includes(f.properties.id));
 
+  // GEO-28: a screen-reader-only, polite live region. Announces scoring state + a textual
+  // equivalent of the (visual) ranked results — the non-visual path to the same information.
+  // Announce the SCORED outcome (keyed to the score, not the filtered view) so typing in the
+  // sort/filter controls doesn't re-announce on every keystroke.
+  const srSummary = useMemo(() => {
+    if (scoreStatus === "scoring") return "Scoring parcels in the drawn area.";
+    if (scoreStatus === "error") return scoreError ?? "Scoring failed.";
+    if (scoreStatus === "idle") return "No area scored yet. Draw an area on the map to score parcels.";
+    if (features.length === 0) return "No parcels passed the screen in the drawn area.";
+    const uc = scoreResult?.meta.use_case === "data_center" ? "data center" : "utility solar";
+    const t = features[0]?.properties;
+    return (
+      `Scored ${features.length} parcel${features.length === 1 ? "" : "s"} for ${uc}.` +
+      (t ? ` Highest score ${t.score.toFixed(0)} of 100, ${t.apn ?? `parcel ${t.id}`}.` : "")
+    );
+  }, [scoreStatus, scoreError, features, scoreResult]);
+
   return (
     <div className="results-panel">
       <section className="panel-section">
+        <p className="visually-hidden" role="status" aria-live="polite">
+          {srSummary}
+        </p>
         <div className="results-head">
           <h2 className="panel-section__title">Results</h2>
           {features.length > 0 && (
@@ -156,7 +178,7 @@ export function ResultsPanel() {
               <CompareTable features={compared} onClear={() => setCompareIds([])} />
             )}
 
-            <ul className="results-list" ref={listRef}>
+            <ul className="results-list" role="list" ref={listRef} aria-label="Ranked parcels (highest suitability first)">
               {filtered.map((f) => {
                 const p = f.properties;
                 const active = selected?.id === p.id;
@@ -166,7 +188,13 @@ export function ResultsPanel() {
                     data-parcel={String(p.id)}
                     className={active ? "results-row results-row--active" : "results-row"}
                   >
-                    <button type="button" className="results-row__main" onClick={() => select(f)} aria-pressed={active}>
+                    <button
+                      type="button"
+                      className="results-row__main"
+                      onClick={() => select(f)}
+                      aria-current={active ? "true" : undefined}
+                      aria-label={`Rank ${p.rank}, ${p.apn ?? `parcel ${p.id}`}, suitability ${p.score.toFixed(0)} of 100, ${fmtAcres(p.acres)}`}
+                    >
                       <span className="results-row__rank">#{p.rank}</span>
                       <span
                         className="score-chip"

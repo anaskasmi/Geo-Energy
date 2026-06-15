@@ -147,7 +147,8 @@
   left: 12px;
   z-index: 5;
   padding: 4px;
-  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  /* GEO-28: near-solid backing so control text keeps WCAG AA contrast over any basemap. */
+  background: color-mix(in srgb, var(--surface) 97%, transparent);
   border: 1px solid var(--border);
   border-radius: 10px;
   box-shadow: var(--shadow);
@@ -338,7 +339,8 @@
   max-width: calc(100% - 24px);
   flex-wrap: wrap;
   justify-content: center;
-  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  /* GEO-28: near-solid backing so the toolbar text/icons keep WCAG AA contrast over the map. */
+  background: color-mix(in srgb, var(--surface) 97%, transparent);
   border: 1px solid var(--border);
   border-radius: 10px;
   box-shadow: var(--shadow);
@@ -412,6 +414,22 @@
   background: var(--bg-sunken);
   color: var(--text);
   font-size: 12px;
+}
+
+/* ── Target sizes (GEO-28, WCAG 2.2 SC 2.5.8: min 24x24 CSS px; mobile bumps to 44 in GEO-29) ── */
+.draw-btn,
+.theme-toggle__btn,
+.segmented__btn {
+  min-height: 28px;
+}
+.context-banner__close,
+.compare__clear {
+  min-width: 24px;
+  min-height: 24px;
+}
+.results-row__compare {
+  min-width: 40px;
+  justify-content: center;
 }
 
 /* ── Utility ──────────────────────────────────────────────────────────────────── */
@@ -765,4 +783,313 @@
 .parcel-popup .maplibregl-popup-tip {
   border-top-color: var(--surface);
   border-bottom-color: var(--surface);
+}
+
+/* ── Desktop: resizable panels + context menu + shortcut sheet (GEO-30) ────────── */
+.resize-handle {
+  position: relative;
+  z-index: 4;
+  cursor: col-resize;
+  background: transparent;
+  touch-action: none;
+}
+.resize-handle::after {
+  content: "";
+  position: absolute;
+  inset: 0 2px;
+  border-radius: 2px;
+}
+.resize-handle:hover::after,
+.resize-handle:focus-visible::after {
+  background: var(--accent);
+  opacity: 0.45;
+}
+.resize-handle:focus-visible {
+  outline: none;
+}
+
+.map-context-menu {
+  position: absolute;
+  z-index: 20;
+  min-width: 170px;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+.map-context-menu button {
+  display: block;
+  width: 100%;
+  min-height: 32px;
+  text-align: left;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+}
+.map-context-menu button:hover,
+.map-context-menu button:focus-visible {
+  background: var(--bg-sunken);
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.45);
+}
+.modal {
+  width: min(420px, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 16px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+}
+.modal__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.modal__title {
+  font-size: 15px;
+  font-weight: 700;
+}
+.modal__close {
+  min-width: 28px;
+  min-height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+.modal__close:hover {
+  background: var(--bg-sunken);
+}
+.shortcut-list {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.shortcut-list__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.shortcut-list__row dt {
+  flex: 0 0 auto;
+}
+.shortcut-list__row dd {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+  text-align: right;
+}
+kbd {
+  font: inherit;
+  font-size: 11px;
+  padding: 2px 6px;
+  border: 1px solid var(--border-strong);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: var(--bg-sunken);
+  color: var(--text);
+  white-space: nowrap;
+}
+
+/* ── Mobile UX (GEO-29): FAB + finger-sized targets ───────────────────────────── */
+.fab {
+  position: absolute;
+  right: calc(16px + env(safe-area-inset-right, 0px));
+  bottom: calc(16px + 14vh + env(safe-area-inset-bottom, 0px)); /* clear the peek-height sheet */
+  z-index: 15;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 52px;
+  min-width: 52px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: 26px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-size: 15px;
+  font-weight: 600;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
+}
+.fab[aria-pressed="true"] {
+  background: var(--text);
+  color: var(--bg-elevated);
+}
+/* Hide the FAB once the sheet is raised past peek, so it can't overlap sheet content / controls
+   (GEO-29). The FAB follows .bottom-sheet in the DOM, so the general-sibling combinator applies. */
+.bottom-sheet:not([data-snap="peek"]) ~ .fab {
+  display: none;
+}
+
+/* WCAG 2.2 SC 2.5.8 bumped to a comfortable 44px on touch (coarse) pointers. */
+@media (pointer: coarse) {
+  .draw-btn,
+  .segmented__btn,
+  .theme-toggle__btn,
+  .results-row__main,
+  .map-context-menu button {
+    min-height: 44px;
+  }
+  .draw-btn--icon {
+    min-width: 44px;
+  }
+  .context-banner__close,
+  .compare__clear,
+  .modal__close,
+  .bottom-sheet__handle {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .results-row__compare {
+    min-width: 48px;
+  }
+  .results-row__compare input {
+    width: 22px;
+    height: 22px;
+  }
+}
+
+/* ── Agent chat (GEO-27) ──────────────────────────────────────────────────────── */
+.agent-chat {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.agent-chat__log {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 4px;
+}
+.chat-msg {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 92%;
+}
+.chat-msg--user {
+  align-self: flex-end;
+  align-items: flex-end;
+}
+.chat-msg--assistant {
+  align-self: flex-start;
+}
+.chat-msg__text {
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+.chat-msg--user .chat-msg__text {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  border-bottom-right-radius: 3px;
+}
+.chat-msg--assistant .chat-msg__text {
+  background: var(--bg-sunken);
+  color: var(--text);
+  border-bottom-left-radius: 3px;
+}
+.chat-cursor {
+  margin-left: 1px;
+  animation: chat-blink 1s steps(2, start) infinite;
+}
+@keyframes chat-blink {
+  to {
+    opacity: 0;
+  }
+}
+.chat-refs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.chat-ref {
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  color: var(--text);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.chat-ref:hover,
+.chat-ref:focus-visible {
+  border-color: var(--accent);
+}
+.chat-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.chat-chip {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-sunken);
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.chat-chip:hover,
+.chat-chip:focus-visible {
+  color: var(--text);
+  border-color: var(--accent);
+}
+.chat-input {
+  display: flex;
+  gap: 6px;
+}
+.chat-input input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-sunken);
+  color: var(--text);
+  font-size: 13px;
+}
+.chat-input button {
+  padding: 0 12px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-size: 13px;
+  font-weight: 600;
+}
+.chat-input button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.chat-note {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.chat-note code {
+  font-size: 10px;
 }

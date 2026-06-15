@@ -104,8 +104,17 @@ export const LAYERS: LayerDef[] = [
 /** Logical layer id for the deck.gl scored-parcels overlay (GEO-24). */
 export const RESULT_LAYER_ID = "result";
 
-/** Low → high suitability color ramp for the legend + the score overlay. */
-export const SCORE_RAMP = ["#d73027", "#fc8d59", "#fee08b", "#91cf60", "#1a9850"];
+/**
+ * Low → high suitability color ramp for the legend + the score overlay.
+ *
+ * GEO-28: this is **viridis** — perceptually uniform (equal steps look equally different) and
+ * color-vision-deficiency safe. We deliberately do NOT use a red→green ramp: red/green is the
+ * most common CVD confusion, and a diverging ramp also misreads a single-ended "suitability"
+ * scale. Viridis is monotonic in lightness (dark=low → bright=high), so the order survives
+ * greyscale printing and every CVD type. Score is never conveyed by colour ALONE — the ranked
+ * list, the numeric score chip, and the rank pair with it everywhere.
+ */
+export const SCORE_RAMP = ["#440154", "#414487", "#2a788e", "#22a884", "#7ad151", "#fde725"];
 
 function hexToRgb(hex: string): [number, number, number] {
   const n = parseInt(hex.slice(1), 16);
@@ -136,11 +145,20 @@ export function scoreColorCss(score: number | null | undefined): string {
   return `rgb(${r}, ${g}, ${b})`;
 }
 
-/** Readable text color (near-black or white) for a score chip, by background luminance (WCAG). */
+function _srgbToLinear(c: number): number {
+  const s = c / 255;
+  return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+}
+
+/** Readable text color for a score chip: pick black or white by WHICHEVER gives the higher WCAG
+ *  contrast ratio against the chip background (not a naive luminance threshold — viridis mid-greens
+ *  are dark enough that white text fails AA, so they need black). Always lands ≥ ~4.6:1 on viridis. */
 export function scoreTextColor(score: number | null | undefined): string {
   const [r, g, b] = scoreColor(score, 255);
-  const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
-  return luminance > 0.6 ? "#1a1a1a" : "#ffffff";
+  const L = 0.2126 * _srgbToLinear(r) + 0.7152 * _srgbToLinear(g) + 0.0722 * _srgbToLinear(b);
+  const contrastWhite = 1.05 / (L + 0.05);
+  const contrastBlack = (L + 0.05) / 0.05;
+  return contrastBlack >= contrastWhite ? "#1a1a1a" : "#ffffff";
 }
 
 export interface LayerToggleState {

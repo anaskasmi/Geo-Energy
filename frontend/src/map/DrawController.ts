@@ -63,21 +63,31 @@ export class DrawController {
   }
 
   private create(): TerraDraw {
+    // GEO-29: enlarge the draw/edit vertices on touch (coarse-pointer) devices so they meet
+    // finger-sized hit targets; leave terra-draw's defaults on mouse/desktop.
+    const coarse = typeof window !== "undefined" && !!window.matchMedia?.("(pointer: coarse)").matches;
+    const polygonMode = coarse
+      ? new TerraDrawPolygonMode({ styles: { closingPointWidth: 10, coordinatePointWidth: 8 } })
+      : new TerraDrawPolygonMode();
+    const selectFlags = {
+      flags: {
+        polygon: {
+          feature: {
+            draggable: true,
+            coordinates: { midpoints: true, draggable: true, deletable: true },
+          },
+        },
+      },
+    };
+    const selectMode = coarse
+      ? new TerraDrawSelectMode({
+          ...selectFlags,
+          styles: { selectionPointWidth: 10, midPointWidth: 8 },
+        })
+      : new TerraDrawSelectMode(selectFlags);
     return new TerraDraw({
       adapter: new TerraDrawMapLibreGLAdapter({ map: this.map }),
-      modes: [
-        new TerraDrawPolygonMode(),
-        new TerraDrawSelectMode({
-          flags: {
-            polygon: {
-              feature: {
-                draggable: true,
-                coordinates: { midpoints: true, draggable: true, deletable: true },
-              },
-            },
-          },
-        }),
-      ],
+      modes: [polygonMode, selectMode],
       undoRedo: {
         // modeLevel: undo/redo vertices WHILE drawing a polygon ("undo last vertex").
         // sessionLevel: undo/redo whole finished features + edits across the session.

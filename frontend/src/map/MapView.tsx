@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import { GeoJsonLayer } from "@deck.gl/layers";
 import { MapboxOverlay } from "@deck.gl/mapbox";
@@ -13,6 +13,7 @@ import { applyLayerState, RESULT_LAYER_ID, scoreColor } from "./layers";
 import type { ParcelInfo } from "./MapContext";
 import { addParcelsLayer, registerPmtilesProtocol, setSelectedParcel } from "./pmtiles";
 import { useMapStore } from "./useMapStore";
+import { haptic } from "../utils/haptics";
 
 /** Selected-parcel outline color in the deck overlay (matches HIGHLIGHT_COLOR #f97316). */
 const HIGHLIGHT_RGB: [number, number, number] = [249, 115, 22];
@@ -54,6 +55,8 @@ export function MapView() {
   const drawRef = useRef<DrawController | null>(null);
   const overlayRef = useRef<MapboxOverlay | null>(null);
   const firstStyleSwap = useRef(true);
+  // Desktop right-click context menu (GEO-30): screen px + the clicked lng/lat.
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; lng: number; lat: number } | null>(null);
 
   const { resolvedTheme } = useTheme();
   const store = useMapStore();
@@ -64,6 +67,7 @@ export function MapView() {
     drawMode,
     scoreResult,
     setSelected,
+    setDrawMode,
     setDrawAreaSqm,
     setDrawHistory,
     setCanDeleteSelection,
@@ -161,6 +165,7 @@ export function MapView() {
     // Hover tooltip (desktop) + click-to-select (desktop & mobile tap).
     const popup = new maplibregl.Popup({ closeButton: false, closeOnClick: false, className: "parcel-popup" });
     map.on("mousemove", PARCELS_FILL_LAYER, (event) => {
+      if (drawModeRef.current !== "idle") return; // don't fight the draw crosshair / interrupt drawing
       map.getCanvas().style.cursor = "pointer";
       const feature = event.features?.[0];
       if (!feature) return;
@@ -172,7 +177,7 @@ export function MapView() {
         .addTo(map);
     });
     map.on("mouseleave", PARCELS_FILL_LAYER, () => {
-      map.getCanvas().style.cursor = "";
+      map.getCanvas().style.cursor = drawModeRef.current === "draw" ? "crosshair" : "";
       popup.remove();
     });
     map.on("click", PARCELS_FILL_LAYER, (event) => {
@@ -180,6 +185,64 @@ export function MapView() {
       if (!feature) return;
       setSelected(parcelFromFeature(feature.properties as Record<string, unknown>));
     });
+
+    // Right-click context menu (GEO-30): draw here / center / copy coords. A left click or a map
+    // move dismisses it. `suppressNextClick` stops a touch long-press's trailing synthetic click
+    // from immediately closing the menu it just opened (GEO-29).
+    let suppressNextClick = false;
+    map.on("contextmenu", (event) => {
+      event.preventDefault();
+      setCtxMenu({ x: event.point.x, y: event.point.y, lng: event.lngLat.lng, lat: event.lngLat.lat });
+    });
+    map.on("click", () => {
+      if (suppressNextClick) {
+        suppressNextClick = false;
+        return;
+      }
+      setCtxMenu(null);
+    });
+    map.on("movestart", () => setCtxMenu(null));
+
+    // Long-press (touch) opens the same context menu — mobile parity with desktop right-click
+    // (GEO-29). A 500 ms hold without panning (<12 px move) fires; a short tap / pan does not.
+    const canvas = map.getCanvas();
+    let lpTimer: number | undefined;
+    let lpStart: { x: number; y: number } | null = null;
+    const clearLp = () => {
+      if (lpTimer !== undefined) {
+        window.clearTimeout(lpTimer);
+        lpTimer = undefined;
+      }
+    };
+    const onTouchStart = (ev: TouchEvent) => {
+      clearLp();
+      if (ev.touches.length !== 1) return;
+      const t = ev.touches[0];
+      lpStart = { x: t.clientX, y: t.clientY };
+      const rect = canvas.getBoundingClientRect();
+      const px = t.clientX - rect.left;
+      const py = t.clientY - rect.top;
+      lpTimer = window.setTimeout(() => {
+        const ll = map.unproject([px, py]);
+        haptic(15);
+        suppressNextClick = true; // don't let the trailing click close the menu we just opened
+        setCtxMenu({ x: px, y: py, lng: ll.lng, lat: ll.lat });
+      }, 500);
+    };
+    const onTouchMove = (ev: TouchEvent) => {
+      if (!lpStart || ev.touches.length === 0) {
+        clearLp();
+        return;
+      }
+      const t = ev.touches[0];
+      if (Math.hypot(t.clientX - lpStart.x, t.clientY - lpStart.y) > 12) clearLp();
+    };
+    canvas.addEventListener("touchstart", onTouchStart, { passive: true });
+    canvas.addEventListener("touchmove", onTouchMove, { passive: true });
+    canvas.addEventListener("touchend", clearLp, { passive: true });
+    canvas.addEventListener("touchcancel", clearLp, { passive: true });
+    // A pan/drag cancels a pending long-press (so it can't fire at a now-stale coordinate).
+    map.on("dragstart", clearLp);
 
     // Swallow source/tile errors (e.g. a missing parcels .pmtiles) so the basemap stays.
     map.on("error", (event) => {
@@ -191,6 +254,11 @@ export function MapView() {
 
     return () => {
       resizeObserver.disconnect();
+      clearLp();
+      canvas.removeEventListener("touchstart", onTouchStart);
+      canvas.removeEventListener("touchmove", onTouchMove);
+      canvas.removeEventListener("touchend", clearLp);
+      canvas.removeEventListener("touchcancel", clearLp);
       popup.remove();
       drawRef.current?.destroy();
       drawRef.current = null;
@@ -233,10 +301,30 @@ export function MapView() {
     if (map) setSelectedParcel(map, selected?.id ?? null);
   }, [selected]);
 
-  // Switch the drawing tool mode.
+  // Switch the drawing tool mode + show a crosshair cursor while drawing (GEO-30).
   useEffect(() => {
     drawRef.current?.setMode(drawMode);
+    const map = mapRef.current;
+    if (map) map.getCanvas().style.cursor = drawMode === "draw" ? "crosshair" : "";
   }, [drawMode]);
+
+  // Dismiss the context menu on Escape or a click/tap outside it (GEO-30).
+  useEffect(() => {
+    if (!ctxMenu) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setCtxMenu(null);
+    };
+    const onDown = (e: Event) => {
+      const menu = document.querySelector(".map-context-menu");
+      if (!menu || !menu.contains(e.target as Node)) setCtxMenu(null);
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onDown, true);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("pointerdown", onDown, true);
+    };
+  }, [ctxMenu]);
 
   // Stable scored-features array (new reference ONLY when scoreResult changes), so deck.gl can
   // honor updateTriggers and recolor the selection outline without re-tessellating every fill.
@@ -287,5 +375,57 @@ export function MapView() {
     overlay.setProps({ layers: layer ? [layer] : [] });
   }, [scoredData, resultToggle, selected, setSelected]);
 
-  return <div ref={containerRef} className="map-view" aria-label="Map" role="region" />;
+  return (
+    <>
+      <div ref={containerRef} className="map-view" aria-label="Map" role="region" />
+      {ctxMenu && (
+        <ul className="map-context-menu" style={{ left: ctxMenu.x, top: ctxMenu.y }} role="menu" aria-label="Map actions">
+          <li role="none">
+            <button
+              role="menuitem"
+              type="button"
+              onClick={() => {
+                setDrawMode("draw");
+                setCtxMenu(null);
+              }}
+            >
+              Draw here
+            </button>
+          </li>
+          <li role="none">
+            <button
+              role="menuitem"
+              type="button"
+              onClick={() => {
+                const map = mapRef.current;
+                if (map) {
+                  const target = { center: [ctxMenu.lng, ctxMenu.lat] as [number, number] };
+                  const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+                  if (reduce) map.jumpTo(target);
+                  else map.flyTo({ ...target, duration: 600, essential: true });
+                }
+                setCtxMenu(null);
+              }}
+            >
+              Center here
+            </button>
+          </li>
+          <li role="none">
+            <button
+              role="menuitem"
+              type="button"
+              onClick={() => {
+                void navigator.clipboard
+                  ?.writeText(`${ctxMenu.lat.toFixed(6)}, ${ctxMenu.lng.toFixed(6)}`)
+                  .catch(() => {});
+                setCtxMenu(null);
+              }}
+            >
+              Copy coordinates
+            </button>
+          </li>
+        </ul>
+      )}
+    </>
+  );
 }

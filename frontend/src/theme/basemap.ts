@@ -136,7 +136,12 @@ export function buildBaseStyle(theme: ResolvedTheme, basemap: BasemapId = "auto"
  * background, below all data layers.
  */
 export function applyBasemap(map: MapLibreMap, basemap: BasemapId, theme: ResolvedTheme): void {
-  if (!map.isStyleLoaded()) return;
+  // Gate on the basemap layer existing, NOT on map.isStyleLoaded(): the latter stays false
+  // whenever ANY source is still pending (tiles loading mid-pan) or failing (e.g. a missing
+  // parcels PMTiles), which would silently freeze the basemap selector. The basemap +
+  // background layers are created at init (buildBaseStyle), so once they exist the style is
+  // structurally ready to hot-swap and the getLayer/getSource/addLayer calls below are safe.
+  if (!map.getLayer(BASEMAP_LAYER_ID)) return;
   const src = resolveSource(concreteBasemap(basemap, theme), theme);
 
   if (map.getLayer(BACKGROUND_LAYER_ID)) {

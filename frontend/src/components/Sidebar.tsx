@@ -1,3 +1,4 @@
+import { AgentChat } from "./AgentChat";
 import { BasemapControl } from "./BasemapControl";
 import { LayerControl } from "./LayerControl";
 import { Legend } from "./Legend";
@@ -16,6 +17,11 @@ export function Sidebar() {
         <h1 className="sidebar__title">Site Selection</h1>
         <p className="sidebar__subtitle">Kern County, CA</p>
       </header>
+
+      <section className="panel-section">
+        <h2 className="panel-section__title">Assistant</h2>
+        <AgentChat />
+      </section>
 
       <section className="panel-section">
         <h2 className="panel-section__title">Scoring</h2>
