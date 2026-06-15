@@ -31,6 +31,13 @@ services:
         required: false
     environment:
       DATA_DIR: /data
+      # Cap DuckDB's buffer pool so the large enrichment (421k parcels × per-parcel nearest
+      # substation / transmission line / GHI joins) SPILLS to disk instead of OOM-killing the
+      # container (exit 137 = SIGKILL). DuckDB sizes its pool to ~80% of host RAM and does NOT
+      # reliably read the cgroup limit, so without this it grabs more than the container allows.
+      # Keep this BELOW Docker Desktop's VM memory (Settings → Resources → Memory; give it
+      # ≥ ~6 GB for headroom + speed). Override per-run with DUCKDB_MEMORY_LIMIT in .env.
+      DUCKDB_MEMORY_LIMIT: ${DUCKDB_MEMORY_LIMIT:-3GB}
     volumes:
       - data:/data                # read-write: writes the artifact into /data/current
 
