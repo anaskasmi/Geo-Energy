@@ -332,6 +332,28 @@ PARCELS_TILE_SIMPLIFICATION = 10             # Douglas-Peucker tolerance below m
 PARCELS_TILE_ATTRS = ("id", "apn", "acres")  # base attributes carried into the tiles
 TIPPECANOE_BIN_ENV = "GEO_TIPPECANOE_BIN"    # override the tippecanoe executable path
 
+# ── DuckDB artifact assembly + parcel enrichment (GEO-12 / GEO-13) ─────────────
+# The builder runs once after every fetcher has loaded its table, the convergence point
+# where all core layers are present. assemble() (GEO-12) finalizes the parcels table —
+# Hilbert-orders it on write for spatial locality, builds an R-tree index on the geometry,
+# and verifies the GeoParquet intermediates carry their bbox struct. enrich() (GEO-13,
+# FR-A4) computes the derived per-parcel columns (centroids, zonal slope, GHI, nearest
+# tx/substation distances + kV, POI competition, SFHA/zoning/exclusion flags) IN PLACE
+# (ALTER ADD COLUMN + UPDATE ... FROM) so the index + Hilbert order survive. Every metric
+# computation goes through crs.to_metric_sql (EPSG:26911, always_xy:=true) — the CRS hotspot.
+# NB: the GEO-13 ticket text assumes DuckDB's 1.3+ auto spatial-join optimizer, but the repo
+# deliberately pins duckdb==1.1.3 (spatial ABI); the joins are written to be correct without
+# it (the county-clipped candidate sets are small, so nested-loop nearest-neighbor is fine).
+PARCELS_TABLE = "parcels"
+PARCELS_GEOM_INDEX = "parcels_geom_rtree"    # R-tree index name on parcels.geom
+# Core fetcher tables that MUST exist before assembly (the convergence contract: parcels,
+# zoning, tx/sub, CAISO, flood, slope, GHI + the shared county_boundary). Missing one means a
+# core fetcher did not run — fail the build loudly rather than ship a half-assembled artifact.
+BUILDER_REQUIRED_TABLES = (
+    "county_boundary", "parcels", "zoning", "transmission_lines", "substations",
+    "caiso_queue", "flood_sfha", "slope_raster", "ghi_grid",
+)
+
 
 @dataclass(frozen=True)
 class Settings:

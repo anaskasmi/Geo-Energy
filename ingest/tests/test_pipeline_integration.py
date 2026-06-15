@@ -95,6 +95,31 @@ def test_full_build_with_all_layers(tmp_path, monkeypatch):
         assert con.execute(
             "SELECT total_mw FROM caiso_queue_summary WHERE category = 'total'"
         ).fetchone()[0] == 725.0
+
+        # GEO-12 assembly: R-tree index on parcels.geom present in the committed artifact.
+        idxs = {r[0] for r in con.execute("SELECT index_name FROM duckdb_indexes()").fetchall()}
+        assert config.PARCELS_GEOM_INDEX in idxs
+
+        # GEO-13 enrichment: every FR-A4 derived column is present and the always-computable
+        # ones (centroids + nearest-neighbor distances/values from non-empty layers) are filled
+        # for all 4 parcels.
+        from pipeline.builder import ENRICH_COLUMNS
+        pcols = {r[0] for r in con.execute("DESCRIBE parcels").fetchall()}
+        for name, _typ in ENRICH_COLUMNS:
+            assert name in pcols, name
+        # (nearest_sub_kv is intentionally nullable — the nearest substation may carry a
+        # sentinel-nulled voltage — so it is not in this always-filled set; dist_sub_m proves
+        # the nearest-substation join ran.)
+        for col in ("centroid_26911", "centroid_4326", "dist_sub_m", "dist_tx_m", "ghi"):
+            assert con.execute(
+                f"SELECT count(*) FROM parcels WHERE {col} IS NULL"
+            ).fetchone()[0] == 0, col
+        # Zonal mean slope was sampled from slope.tif for every parcel (county-wide raster).
+        assert con.execute(
+            "SELECT count(*) FROM parcels WHERE mean_slope_pct IS NOT NULL"
+        ).fetchone()[0] == 4
+        # Distances are metric (EPSG:26911) — meters, not degrees.
+        assert con.execute("SELECT max(dist_sub_m) FROM parcels").fetchone()[0] > 1.0
     finally:
         con.close()
 
@@ -107,6 +132,11 @@ def test_full_build_with_all_layers(tmp_path, monkeypatch):
         "caiso_queue", "poi_competition", "caiso_queue_summary",
         "slope", "ghi_grid", "eia_generators", "exclusions",
     ]  # run_order
+    # Builder provenance recorded in the manifest (GEO-12 / GEO-13).
+    assert manifest["assembly"]["rtree_index"] == config.PARCELS_GEOM_INDEX
+    assert manifest["assembly"]["hilbert_ordered"] is True
+    assert manifest["enrichment"]["parcels"] == 4
+    assert manifest["enrichment"]["with_slope"] == 4
 
     # Intermediates + tippecanoe input + zoning_rules.csv + success marker all present.
     for artifact in (

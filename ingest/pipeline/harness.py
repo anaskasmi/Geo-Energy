@@ -19,7 +19,7 @@ import os
 import shutil
 from pathlib import Path
 
-from . import config, db, fetchers
+from . import builder, config, db, fetchers
 from .config import Settings
 from .fetchers.base import FetchContext, LayerResult
 from .logging_setup import get_logger, log_event
@@ -71,7 +71,14 @@ def run(settings: Settings | None = None, *, build_id: str | None = None) -> Pat
                 log_event(_log, "layer.done", layer=result.name,
                           table=result.table, features=result.feature_count)
 
-            _write_manifest(con, staging, build_id, results)
+            # Convergence point: all fetchers done. Assemble the artifact shell (GEO-12:
+            # Hilbert order + R-tree index + validation) then enrich parcels (GEO-13: FR-A4
+            # derived columns). Both run on the build connection, before the manifest write.
+            assembly = builder.assemble(con, staging, cfg, _log)
+            enrichment = builder.enrich(con, staging, cfg, _log)
+
+            _write_manifest(con, staging, build_id, results,
+                            assembly=assembly, enrichment=enrichment)
         finally:
             con.close()
 
@@ -113,7 +120,15 @@ def _promote(cfg: Settings, staging: Path, build_id: str) -> Path:
     return final
 
 
-def _write_manifest(con, release: Path, build_id: str, results: list[LayerResult]) -> None:
+def _write_manifest(
+    con,
+    release: Path,
+    build_id: str,
+    results: list[LayerResult],
+    *,
+    assembly: dict | None = None,
+    enrichment: dict | None = None,
+) -> None:
     manifest = {
         "build_id": build_id,
         "built_at": _utcnow_iso(),
@@ -131,6 +146,9 @@ def _write_manifest(con, release: Path, build_id: str, results: list[LayerResult
             }
             for r in results
         ],
+        # Builder provenance (GEO-12 assembly / GEO-13 enrichment summaries).
+        "assembly": assembly or {},
+        "enrichment": enrichment or {},
     }
     (release / config.MANIFEST_NAME).write_text(json.dumps(manifest, indent=2))
 
