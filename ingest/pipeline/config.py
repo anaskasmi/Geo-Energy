@@ -246,17 +246,20 @@ SLOPE_FINAL_TIF = "slope_final.tif"          # 10 m final-pass raster (when an A
 SLOPE_TABLE = "slope_raster"                 # metadata table (one row per emitted raster)
 
 # ── Solar resource (GEO-10, NREL Solar Resource API → GHI grid) ────────────────
-# NREL "Solar Resource Data" v1 (developer.nrel.gov/api/solar/solar_resource/v1.json):
+# NREL "Solar Resource Data" v1 (developer.nlr.gov/api/solar/solar_resource/v1.json):
 # per lat/lon it returns annual + monthly avg_ghi (kWh/m²/day), avg_dni and avg_lat_tilt.
+# NB the old developer.nrel.gov host was RETIRED 2026-05-29 → developer.nlr.gov (fronted by
+# api.data.gov / cloud.gov); endpoint + schema confirmed live 2026-06-15 (DEMO_KEY).
 # We sample a regular grid over the county bbox (clipped to the polygon), query each point
 # (throttled to the 1,000 req/hr key limit, on-disk cached so re-runs don't re-query), and
 # persist a `ghi_grid` points table + ghi_grid.parquet. GHI is sampled PER PARCEL from this
 # grid in enrichment (GEO-13) — never queried per parcel (review C10). The API key is
 # Settings.nrel_api_key (env NREL_API_KEY), the project's one secret (kept out of repr/logs).
 # A pre-staged CSV (lon,lat,avg_ghi,avg_dni,avg_lat_tilt; 4326) via GEO_NREL_GHI_SOURCE feeds
-# the offline/test path. Live NREL is a US-gov host that may geo-block non-US IPs — validate
-# from a US egress. The HTTP client lives in pipeline/nrel.py with an injectable transport.
-NREL_SOLAR_RESOURCE_URL = "https://developer.nrel.gov/api/solar/solar_resource/v1.json"
+# the offline/test path. NREL needs a free api_key — get one at https://developer.nlr.gov/signup/
+# (instant, free; DEMO_KEY works for light testing). The HTTP client lives in pipeline/nrel.py
+# with an injectable transport.
+NREL_SOLAR_RESOURCE_URL = "https://developer.nlr.gov/api/solar/solar_resource/v1.json"
 NREL_GHI_URL_ENV = "GEO_NREL_GHI_URL"
 NREL_GHI_SOURCE_ENV = "GEO_NREL_GHI_SOURCE"   # pre-staged CSV (lon,lat,avg_ghi,avg_dni,avg_lat_tilt)
 NREL_GHI_CACHE_ENV = "GEO_NREL_CACHE_DIR"     # response cache dir (default <data_dir>/.cache/nrel)

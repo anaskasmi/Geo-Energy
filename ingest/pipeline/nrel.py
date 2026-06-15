@@ -1,6 +1,6 @@
 """NREL Solar Resource API client (GEO-10) — per-point GHI/DNI/lat-tilt with on-disk cache.
 
-`developer.nrel.gov/api/solar/solar_resource/v1.json?lat=&lon=&api_key=` returns, per point,
+`developer.nlr.gov/api/solar/solar_resource/v1.json?lat=&lon=&api_key=` returns, per point,
 annual + monthly `avg_ghi` / `avg_dni` / `avg_lat_tilt`. This module isolates that network I/O
 (like arcgis.py) so the fetcher transform logic stays testable offline: the HTTP transport is
 injectable (httpx.MockTransport) and responses are cached on disk so re-runs (and tests) don't
