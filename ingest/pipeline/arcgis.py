@@ -12,6 +12,7 @@ fully testable offline.
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 
 import httpx
@@ -24,6 +25,23 @@ _log = get_logger("ingest.arcgis")
 
 def _query_url(layer_url: str) -> str:
     return layer_url.rstrip("/") + "/query"
+
+
+def _count_features(client: httpx.Client, layer_url: str, base: dict, *, log) -> int | None:
+    """Best-effort upfront feature count (ArcGIS `returnCountOnly`) so the page logs below can
+    show progress as a percentage / ETA. Returns None if the server doesn't answer — the
+    download still proceeds, just without a denominator. Never fatal (single attempt)."""
+    params = {k: v for k, v in base.items() if k in ("where", "geometry", "geometryType", "inSR", "spatialRel")}
+    params.update(f="json", returnCountOnly="true", returnGeometry="false")
+    try:
+        resp = client.get(_query_url(layer_url), params=params)
+        resp.raise_for_status()
+        data = resp.json()
+        if isinstance(data, dict) and isinstance(data.get("count"), int):
+            return data["count"]
+    except Exception as err:  # noqa: BLE001 — purely informational; downloads continue
+        log_event(log, "arcgis.count_unavailable", url=layer_url, error=str(err))
+    return None
 
 
 def _get_json(client: httpx.Client, url: str, params: dict, *, retries: int, log) -> dict:
@@ -84,7 +102,18 @@ def fetch_featureserver_geojson(
         )
     features: list[dict] = []
     offset = 0
+    page_no = 0
+    started = time.monotonic()
     with httpx.Client(transport=transport, timeout=timeout, follow_redirects=True) as client:
+        # Best-effort total so the page logs below can show progress / ETA. This download is
+        # paginated and can be large (the full Kern parcels layer is hundreds of thousands of
+        # features) — without per-page logging a healthy multi-minute pull is indistinguishable
+        # from a hang.
+        total_expected = _count_features(client, layer_url, base, log=log)
+        log_event(
+            log, "arcgis.download.start", url=layer_url, page_size=page_size,
+            total_expected=total_expected, has_bbox=bbox is not None,
+        )
         for _ in range(max_pages):
             params = dict(base, resultOffset=str(offset), resultRecordCount=str(page_size))
             data = _get_json(client, _query_url(layer_url), params, retries=retries, log=log)
@@ -95,6 +124,17 @@ def fetch_featureserver_geojson(
             if not page:
                 break
             offset += len(page)
+            page_no += 1
+            elapsed = time.monotonic() - started
+            pct = round(100.0 * len(features) / total_expected, 1) if total_expected else None
+            rate = round(len(features) / elapsed, 1) if elapsed > 0 else None
+            # Emit a heartbeat every page so a long download visibly advances (offset, cumulative
+            # total, percent of the expected count, elapsed seconds, features/sec).
+            log_event(
+                log, "arcgis.page", url=layer_url, page=page_no, fetched=len(page),
+                total=len(features), total_expected=total_expected, pct=pct,
+                elapsed_s=round(elapsed, 1), rate_per_s=rate,
+            )
             exceeded = bool(
                 data.get("exceededTransferLimit")
                 or (data.get("properties") or {}).get("exceededTransferLimit")
@@ -107,7 +147,10 @@ def fetch_featureserver_geojson(
             raise SourceError(f"ArcGIS pagination exceeded {max_pages} pages for {layer_url}")
 
     dest.write_text(json.dumps({"type": "FeatureCollection", "features": features}))
-    log_event(log, "arcgis.fetched", url=layer_url, features=len(features), dest=str(dest))
+    log_event(
+        log, "arcgis.fetched", url=layer_url, features=len(features), dest=str(dest),
+        elapsed_s=round(time.monotonic() - started, 1),
+    )
     return len(features)
 
 
