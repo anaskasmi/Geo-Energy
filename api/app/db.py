@@ -23,6 +23,7 @@ import duckdb
 ARTIFACT_NAME = "site.duckdb"  # NOT kern.duckdb — the ticket text is wrong
 CURRENT_SUBDIR = "current"
 DEFAULT_DATA_DIR = "/data"
+ZONING_RULES_NAME = "zoning_rules.csv"  # curated (zone_code × use_case) → permission, per build
 
 
 def data_dir() -> Path:
@@ -36,6 +37,15 @@ def artifact_path() -> Path:
     Resolved lazily so tests can set ``DATA_DIR`` before app startup.
     """
     return data_dir() / CURRENT_SUBDIR / ARTIFACT_NAME
+
+
+def zoning_rules_path() -> Path:
+    """The build's curated zoning rules CSV: ``$DATA_DIR/current/zoning_rules.csv``.
+
+    Emitted alongside the artifact by the ingest harness; the scoring engine loads it once at
+    startup to derive prohibited zoning per use case. May be absent (then zoning is not a filter).
+    """
+    return data_dir() / CURRENT_SUBDIR / ZONING_RULES_NAME
 
 
 def resolve_threads() -> int:

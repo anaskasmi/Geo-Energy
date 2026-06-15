@@ -17,16 +17,20 @@ minimal skeleton only.
 
 from __future__ import annotations
 
+import json
 import logging
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+import duckdb
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.concurrency import run_in_threadpool
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app import db
+from app import db, perf, scoring, serialize
+from app.models import ScoreRequest, UseCase
 
 logging.basicConfig(
     level=logging.INFO,
@@ -47,6 +51,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.con = None
     app.state.con_error = None
     app.state.artifact_path = str(path)
+    app.state.zoning_rules = {}
+    perf.score_cache.clear()  # fresh cache per process/artifact (a new build means a restart)
     try:
         if not path.exists():
             raise FileNotFoundError(f"artifact not found: {path}")
@@ -55,6 +61,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     except Exception as exc:  # tolerant startup — never crashloop before first ingest
         app.state.con_error = f"{type(exc).__name__}: {exc}"
         log.warning("artifact unavailable at startup (%s): %s", path, app.state.con_error)
+    # Curated zoning rules (per build) drive Stage-A prohibited zoning; best-effort, optional.
+    try:
+        app.state.zoning_rules = scoring.load_zoning_rules(db.zoning_rules_path())
+        if app.state.zoning_rules:
+            log.info("loaded zoning rules for use cases: %s", sorted(app.state.zoning_rules))
+        else:
+            log.info("no zoning_rules.csv found; zoning will not be a Stage-A filter")
+    except Exception as exc:
+        log.warning("failed to load zoning rules: %s: %s", type(exc).__name__, exc)
+        app.state.zoning_rules = {}
     try:
         yield
     finally:
@@ -70,6 +86,11 @@ app = FastAPI(
     docs_url="/api/docs",
     lifespan=lifespan,
 )
+
+# Performance layer (GEO-18). Middleware added last wraps outermost, so add ETag first (inner —
+# it hashes the uncompressed body) then GZip (outer — compresses the final bytes ≥ 512 B).
+app.add_middleware(perf.ETagMiddleware)
+app.add_middleware(GZipMiddleware, minimum_size=512)
 
 
 @app.exception_handler(StarletteHTTPException)
@@ -101,10 +122,9 @@ def get_cursor():
     """
     con = getattr(app.state, "con", None)
     if con is None:
-        raise HTTPException(
-            status_code=503,
-            detail=getattr(app.state, "con_error", None) or "database unavailable",
-        )
+        # Client-facing detail is generic (no artifact path / engine internals); the full reason
+        # was logged server-side at startup. See app.state.con_error for ops.
+        raise HTTPException(status_code=503, detail="database unavailable")
     cur = con.cursor()
     try:
         yield cur
@@ -145,6 +165,129 @@ async def health(cur=Depends(get_cursor)) -> dict:
         "spatial": True,
         "artifact": getattr(app.state, "artifact_path", None),
     }
+
+
+def _fetch(cur, sql: str, params: dict) -> tuple[list[str], list[tuple]]:
+    """Run a blocking query on the per-request cursor; return (column names, rows)."""
+    rel = cur.execute(sql, params)
+    cols = [c[0] for c in rel.description]
+    return cols, rel.fetchall()
+
+
+def _resolve_scoring(use_case: str, weights, thresholds, zoning_override):
+    """Resolve weights/thresholds/prohibited-zoning; map ScoringError -> HTTP 422."""
+    try:
+        resolved_weights = scoring.resolve_weights(use_case, weights)
+        resolved_thresholds = scoring.resolve_thresholds(use_case, thresholds)
+        rules = getattr(app.state, "zoning_rules", {}) or {}
+        prohibited = scoring.prohibited_codes(rules, use_case, zoning_override)
+    except scoring.ScoringError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    return resolved_weights, resolved_thresholds, prohibited
+
+
+@app.post("/api/score")
+async def score(req: ScoreRequest, response: Response, cur=Depends(get_cursor)) -> dict:
+    """Score parcels intersecting a drawn polygon (GEO-16/17).
+
+    Body: ``{geometry, use_case, weights?, thresholds?, limit?, offset?}``. Returns a GeoJSON
+    ``FeatureCollection`` of surviving parcels ranked by suitability (0..100), each feature
+    carrying the score, rank, and per-factor raw values, plus a ``meta`` block describing the
+    resolved profile. The candidate prefilter is an R-tree ``ST_Intersects`` scan.
+
+    Identical requests are served from an in-memory LRU cache (GEO-18; ``X-Cache`` header).
+    """
+    threshold_overrides = req.thresholds.model_dump() if req.thresholds else None
+    zoning_override = req.thresholds.prohibited_zoning if req.thresholds else None
+    weights, thresholds, prohibited = _resolve_scoring(
+        req.use_case, req.weights, threshold_overrides, zoning_override
+    )
+
+    cache_key = perf.score_cache_key(
+        req.geometry, req.use_case, weights, thresholds, prohibited, req.limit, req.offset
+    )
+    cached = perf.score_cache.get(cache_key)
+    if cached is not None:
+        response.headers["X-Cache"] = "HIT"
+        return cached
+
+    sql, params = scoring.build_score_sql(
+        weights=weights, thresholds=thresholds, prohibited=prohibited,
+        polygon=True, limit=req.limit, offset=req.offset,
+    )
+    params["poly"] = json.dumps(req.geometry)
+
+    try:
+        cols, data = await run_in_threadpool(_fetch, cur, sql, params)
+    except duckdb.Error as exc:
+        msg = str(exc)
+        if "GeoJSON" in msg or "geometry" in msg.lower():
+            log.warning("score: rejecting invalid geometry: %s", msg)
+            raise HTTPException(status_code=422, detail="invalid geometry")
+        log.error("score query failed: %s: %s", type(exc).__name__, msg)
+        raise HTTPException(status_code=503, detail="scoring temporarily unavailable")
+
+    rows = [dict(zip(cols, r)) for r in data]
+    meta = {
+        "use_case": req.use_case,
+        "weights": {k: round(v, 4) for k, v in weights.items()},
+        "thresholds": thresholds,
+        "prohibited_zoning": prohibited,
+        "zoning_rules_available": bool(getattr(app.state, "zoning_rules", {})),
+        "limit": req.limit,
+        "offset": req.offset,
+    }
+    result = serialize.score_feature_collection(rows, offset=req.offset, meta=meta)
+    perf.score_cache.set(cache_key, result)
+    response.headers["X-Cache"] = "MISS"
+    return result
+
+
+@app.get("/api/explain/{parcel_id}")
+async def explain(
+    parcel_id: int,
+    use_case: UseCase = Query(default="utility_solar"),
+    cur=Depends(get_cursor),
+) -> dict:
+    """Per-factor breakdown for a single parcel (GEO-17).
+
+    Uses the preset weights for ``use_case`` (custom weights are a /api/score concern). Reports
+    which Stage-A exclusions the parcel fails (it is not filtered out here). 404 if not found.
+    """
+    weights, thresholds, prohibited = _resolve_scoring(use_case, None, None, None)
+    sql, params = scoring.build_score_sql(
+        weights=weights, thresholds=thresholds, prohibited=prohibited, parcel_id=True,
+    )
+    params["parcel_id"] = parcel_id
+
+    try:
+        cols, data = await run_in_threadpool(_fetch, cur, sql, params)
+    except duckdb.Error as exc:
+        log.error("explain query failed: %s: %s", type(exc).__name__, exc)
+        raise HTTPException(status_code=503, detail="lookup temporarily unavailable")
+    if not data:
+        raise HTTPException(status_code=404, detail=f"parcel {parcel_id} not found")
+
+    row = dict(zip(cols, data[0]))
+    return serialize.explain_response(row, use_case=use_case, weights=weights)
+
+
+@app.get("/api/context")
+async def context(cur=Depends(get_cursor)) -> dict:
+    """CAISO Kern interconnection-queue summary (GEO-17), informational context only.
+
+    Resilient to a build without the summary table: returns an empty summary rather than erroring.
+    """
+    sql = (
+        "SELECT category, key, n_projects, total_mw, active_n_projects, active_total_mw "
+        "FROM caiso_queue_summary"
+    )
+    try:
+        cols, data = await run_in_threadpool(_fetch, cur, sql, {})
+    except duckdb.Error:
+        return serialize.context_response([])
+    rows = [dict(zip(cols, r)) for r in data]
+    return serialize.context_response(rows)
 
 
 @app.get("/")
