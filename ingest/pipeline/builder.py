@@ -214,7 +214,15 @@ def _build_centroids(con: Any) -> None:
 
 def _build_nearest(con: Any, present: set[str]) -> None:
     """Per-parcel nearest substation / transmission line / GHI point (+ optional EIA generator),
-    each computed in EPSG:26911. Empty source tables yield no rows (NULL after the LEFT JOIN)."""
+    each computed in EPSG:26911. Empty source tables yield no rows (NULL after the LEFT JOIN).
+
+    Streams a GROUP BY aggregate instead of ``row_number()`` over the full parcel×feature
+    cross-join. The window form materialized + sorted hundreds of millions of rows (421k parcels ×
+    every feature), spilling tens of GB to the temp dir (OOM, then "No space left on device").
+    ``min`` / ``arg_min(value, {'d': dist, 'i': id})`` keep the original deterministic (distance,
+    then id) tie-break while holding only one running min per parcel — verified identical to the
+    window form, ties included. ``min(dist)`` covers tx/eia (only the distance is kept).
+    """
     m = crs.to_metric_sql
 
     con.execute(
@@ -223,15 +231,17 @@ def _build_nearest(con: Any, present: set[str]) -> None:
         WITH s AS (
             SELECT id AS sub_id, max_voltage_kv, {m('geom')} AS g
             FROM substations WHERE {_GEOM} IS NOT NULL
-        ),
-        d AS (
-            SELECT c.id, s.sub_id, s.max_voltage_kv, ST_Distance(c.c26911, s.g) AS dist,
-                   row_number() OVER (PARTITION BY c.id
-                                      ORDER BY ST_Distance(c.c26911, s.g), s.sub_id) AS rn
-            FROM _cent c, s
         )
-        SELECT id, sub_id, max_voltage_kv AS nearest_sub_kv, dist AS dist_sub_m
-        FROM d WHERE rn = 1
+        SELECT id, best.sub_id AS sub_id, best.kv AS nearest_sub_kv, best.dist AS dist_sub_m
+        FROM (
+            SELECT c.id AS id,
+                   arg_min(
+                       {{'sub_id': s.sub_id, 'kv': s.max_voltage_kv, 'dist': ST_Distance(c.c26911, s.g)}},
+                       {{'d': ST_Distance(c.c26911, s.g), 'i': s.sub_id}}
+                   ) AS best
+            FROM _cent c, s
+            GROUP BY c.id
+        ) n
         """
     )
     con.execute(
@@ -240,14 +250,10 @@ def _build_nearest(con: Any, present: set[str]) -> None:
         WITH l AS (
             SELECT id AS line_id, {m('geom')} AS g
             FROM transmission_lines WHERE {_GEOM} IS NOT NULL
-        ),
-        d AS (
-            SELECT c.id, ST_Distance(c.c26911, l.g) AS dist,
-                   row_number() OVER (PARTITION BY c.id
-                                      ORDER BY ST_Distance(c.c26911, l.g), l.line_id) AS rn
-            FROM _cent c, l
         )
-        SELECT id, dist AS dist_tx_m FROM d WHERE rn = 1
+        SELECT c.id AS id, min(ST_Distance(c.c26911, l.g)) AS dist_tx_m
+        FROM _cent c, l
+        GROUP BY c.id
         """
     )
     con.execute(
@@ -256,14 +262,11 @@ def _build_nearest(con: Any, present: set[str]) -> None:
         WITH g AS (
             SELECT id AS ghi_id, avg_ghi, {m('geom')} AS gm
             FROM ghi_grid WHERE {_GEOM} IS NOT NULL
-        ),
-        d AS (
-            SELECT c.id, g.avg_ghi, ST_Distance(c.c26911, g.gm) AS dist,
-                   row_number() OVER (PARTITION BY c.id
-                                      ORDER BY ST_Distance(c.c26911, g.gm), g.ghi_id) AS rn
-            FROM _cent c, g
         )
-        SELECT id, avg_ghi AS ghi FROM d WHERE rn = 1
+        SELECT c.id AS id,
+               arg_min(g.avg_ghi, {{'d': ST_Distance(c.c26911, g.gm), 'i': g.ghi_id}}) AS ghi
+        FROM _cent c, g
+        GROUP BY c.id
         """
     )
     if "eia_generators" in present:
@@ -273,14 +276,10 @@ def _build_nearest(con: Any, present: set[str]) -> None:
             WITH e AS (
                 SELECT id AS eia_id, {m('geom')} AS g
                 FROM eia_generators WHERE {_GEOM} IS NOT NULL
-            ),
-            d AS (
-                SELECT c.id, ST_Distance(c.c26911, e.g) AS dist,
-                       row_number() OVER (PARTITION BY c.id
-                                          ORDER BY ST_Distance(c.c26911, e.g), e.eia_id) AS rn
-                FROM _cent c, e
             )
-            SELECT id, dist AS eia_nearest_m FROM d WHERE rn = 1
+            SELECT c.id AS id, min(ST_Distance(c.c26911, e.g)) AS eia_nearest_m
+            FROM _cent c, e
+            GROUP BY c.id
             """
         )
 
