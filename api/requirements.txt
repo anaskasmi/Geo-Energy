@@ -1,10 +1,7 @@
-# API (Service B) dependencies — FastAPI skeleton (GEO-15).
-# duckdb is pinned to the SAME version as ingest (spatial extension ABI compatibility
-# against the artifact ingest builds). Fuller pinning/lockfile is GEO-33.
+# API (Service B) RUNTIME dependencies — production image installs only these (GEO-33).
+# duckdb is pinned to the SAME version as ingest (spatial extension ABI compatibility against
+# the artifact ingest builds). Test-only deps (pytest, httpx/TestClient) live in
+# requirements-dev.txt and are intentionally NOT in the slim runtime image.
 duckdb==1.1.3
 fastapi==0.115.6
 uvicorn[standard]==0.34.0
-
-# Dev/test (kept in-image so tests can run pytest; httpx backs fastapi's TestClient).
-pytest>=8,<9
-httpx>=0.27,<0.29

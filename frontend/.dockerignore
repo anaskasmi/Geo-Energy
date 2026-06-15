@@ -4,3 +4,8 @@ node_modules/
 dist/
 .vite/
 *.md
+# Local dev/test scratch (e.g. a hand-built parcels.pmtiles served from public/ during dev)
+# and Playwright output must never enter the build context.
+public/data/
+.playwright-mcp/
+*.pmtiles

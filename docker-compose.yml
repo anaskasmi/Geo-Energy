@@ -51,10 +51,13 @@ services:
   frontend:
     build:
       context: ./frontend
-      # Build-time Vite env injection (API base URL, Mapbox token) → GEO-33:
-      # args:
-      #   VITE_API_BASE_URL: /api
-      #   VITE_MAPBOX_TOKEN: ${MAPBOX_TOKEN}
+      # Build-time Vite env injection (baked into the client bundle; VITE_* are public by
+      # design — real secrets never reach the frontend). MAPBOX_TOKEN defaults to empty
+      # (token-less CARTO basemap) when unset in .env.
+      args:
+        VITE_API_BASE_URL: /api
+        VITE_MAPBOX_TOKEN: ${MAPBOX_TOKEN:-}
+        VITE_PARCELS_PMTILES_URL: /data/current/parcels.pmtiles
     image: geo-energy/frontend
     profiles: ["build"]           # build-only — `docker compose run --rm frontend`
     volumes:
@@ -65,7 +68,7 @@ services:
       context: ./web
     image: geo-energy/web
     ports:
-      - "8080:80"
+      - "8080:8080"               # nginx runs unprivileged (non-root) and listens on 8080
     volumes:
       - web_dist:/usr/share/nginx/html:ro   # SPA built by `frontend`
       - data:/data:ro                       # serve *.pmtiles via byte-range (GEO-34)

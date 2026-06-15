@@ -1,0 +1,5 @@
+# API dev/test dependencies (NOT shipped in the runtime image). httpx backs FastAPI's
+# TestClient. Run the API tests with: pip install -r requirements-dev.txt && pytest
+-r requirements.txt
+pytest>=8,<9
+httpx>=0.27,<0.29

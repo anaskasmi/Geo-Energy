@@ -9,3 +9,13 @@ venv/
 .mypy_cache/
 .ruff_cache/
 *.md
+# Tests + dev deps are not part of the runtime image (Makefile runs tests separately).
+tests/
+requirements-dev.txt
+# Never bake data artifacts into the image (they live on the data: volume).
+*.duckdb
+*.duckdb.wal
+*.parquet
+*.pmtiles
+*.tif
+*.tiff
