@@ -14,10 +14,18 @@ see a half-built release:  ``$DATA_DIR/current/site.duckdb``.
 
 from __future__ import annotations
 
+import logging
 import os
+import re
 from pathlib import Path
 
 import duckdb
+
+log = logging.getLogger("api.db")
+
+# Operator-set DuckDB resource knobs (validated before inlining into PRAGMA/SET).
+_MEM_LIMIT_RE = re.compile(r"^\d+(\.\d+)?\s*(B|K|KB|M|MB|G|GB|T|TB|KiB|MiB|GiB|TiB)?$", re.IGNORECASE)
+_TEMP_DIR_RE = re.compile(r"^[A-Za-z0-9_./\-]+$")
 
 # --- Mirrored constants (ingest/pipeline/config.py — keep in sync) -------------
 ARTIFACT_NAME = "site.duckdb"  # NOT kern.duckdb — the ticket text is wrong
@@ -81,4 +89,39 @@ def connect(
     except Exception:
         con.close()  # never leak the handle / file lock if bootstrap fails
         raise
+    _apply_resource_limits(con)
     return con
+
+
+def _apply_resource_limits(con: "duckdb.DuckDBPyConnection") -> None:
+    """Apply container-aware DuckDB limits from the environment (best-effort, never fatal).
+
+    - ``DUCKDB_MEMORY_LIMIT`` caps the buffer pool. DuckDB otherwise sizes it to ~80% of the
+      HOST RAM (cgroup memory limits are not reliably detected), so a capped container can
+      OOM-kill + restart-loop without this; compose sets it below ``mem_limit``.
+    - ``DUCKDB_TEMP_DIR`` gives spilling queries a WRITABLE directory. The default temp dir sits
+      next to the DB file, which lives on the read-only ``:ro`` data mount, so a spill would
+      fail; point it at a writable path (e.g. under HOME).
+
+    Failures are logged and swallowed — these are hardening knobs, not correctness-critical, and
+    must not take the read path down on a misconfig.
+    """
+    mem = os.environ.get("DUCKDB_MEMORY_LIMIT", "").strip()
+    if mem:
+        if _MEM_LIMIT_RE.match(mem):
+            try:
+                con.execute(f"PRAGMA memory_limit='{mem}'")
+            except Exception as exc:  # noqa: BLE001 — best-effort
+                log.warning("could not apply DUCKDB_MEMORY_LIMIT=%r: %s", mem, exc)
+        else:
+            log.warning("ignoring malformed DUCKDB_MEMORY_LIMIT=%r", mem)
+    tmp = os.environ.get("DUCKDB_TEMP_DIR", "").strip()
+    if tmp:
+        if _TEMP_DIR_RE.match(tmp):
+            try:
+                os.makedirs(tmp, exist_ok=True)
+                con.execute(f"SET temp_directory='{tmp}'")
+            except Exception as exc:  # noqa: BLE001 — best-effort
+                log.warning("could not set DUCKDB_TEMP_DIR=%r: %s", tmp, exc)
+        else:
+            log.warning("ignoring malformed DUCKDB_TEMP_DIR=%r", tmp)

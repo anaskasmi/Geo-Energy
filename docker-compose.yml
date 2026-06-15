@@ -7,13 +7,16 @@
 #   - frontend : build-only. Compiles the SPA into web_dist:.
 #
 # `ingest` and `frontend` use compose profiles so they do NOT start on `up`; run them
-# explicitly as one-shot jobs (FR-A5: ingest never runs on the request path):
-#   docker compose run --rm ingest
-#   docker compose run --rm frontend
+# explicitly as one-shot jobs (FR-A5: ingest never runs on the request path). Build the data
+# artifact + SPA first, then bring the long-running services up:
+#   docker compose run --rm ingest      # build /data/current/site.duckdb + parcels.pmtiles
+#   docker compose run --rm frontend    # compile the SPA into web_dist:
+#   docker compose up -d api web         # api waits for the artifact; web waits for api healthy
 #
-# Hardening (healthchecks, mem/cpu limits, restart policy) is GEO-35; nginx + proxy is
-# GEO-34; production Dockerfiles are GEO-33. The :ro mounts below encode the core
-# read-only-artifact contract (§1) and are intentional here.
+# Hardening (GEO-35): restart policy + mem/cpu limits on the long-running api/web (NOT the
+# one-shot ingest/frontend), DUCKDB_THREADS pinned to the cpu limit, and web gated on the api
+# becoming healthy. Healthchecks live in the Dockerfiles (GEO-33) and are inherited here. nginx
+# + proxy is GEO-34. The :ro mounts encode the read-only-artifact contract (§1).
 
 name: geo-energy
 
@@ -40,13 +43,27 @@ services:
         required: false
     environment:
       DATA_DIR: /data
+      # GEO-35: pin DuckDB threads to the cpus limit below. os.cpu_count() does NOT respect the
+      # cgroup cpu quota, so without this the API would size PRAGMA threads to the HOST core
+      # count and oversubscribe the container's allotted CPUs.
+      DUCKDB_THREADS: "2"
+      # Pin the buffer pool below mem_limit (DuckDB defaults to ~80% of HOST RAM and would
+      # otherwise OOM-kill the capped container under load).
+      DUCKDB_MEMORY_LIMIT: "768MB"
+      # Writable spill dir under HOME — the default temp dir is next to the DB on the :ro mount.
+      DUCKDB_TEMP_DIR: /home/api/.duckdb_tmp
     volumes:
       - data:/data:ro             # read-only artifact (GEO-15 opens DuckDB read_only=True)
     expose:
       - "8000"                    # internal; web proxies to it. Uncomment ports for direct dev:
     # ports:
     #   - "8000:8000"
-    # depends_on / healthcheck / limits → GEO-35
+    restart: unless-stopped       # GEO-35: long-running service (NOT the one-shot ingest/frontend)
+    mem_limit: 1g                 # GEO-35: VPS sizing — DuckDB + spatial + scoring working set
+    cpus: 2                       # GEO-35: must match DUCKDB_THREADS above
+    # Readiness comes from the image's HEALTHCHECK (api/Dockerfile -> GET /api/health); compose
+    # uses it for `web`'s depends_on: service_healthy. NB: /api/health is 200 only once the
+    # artifact exists, so run `docker compose run --rm ingest` before `up` on a fresh stack.
 
   frontend:
     build:
@@ -73,8 +90,11 @@ services:
       - web_dist:/usr/share/nginx/html:ro   # SPA built by `frontend`
       - data:/data:ro                       # serve *.pmtiles via byte-range (GEO-34)
     depends_on:
-      - api
-    # restart: unless-stopped / healthcheck / limits → GEO-35
+      api:
+        condition: service_healthy  # GEO-35: wait for the API (and thus the artifact) to be ready
+    restart: unless-stopped         # GEO-35
+    mem_limit: 256m                 # GEO-35: nginx is light
+    cpus: 1                         # GEO-35
 
 volumes:
   data:                           # the read-only artifact (ingest rw; api/web ro)
