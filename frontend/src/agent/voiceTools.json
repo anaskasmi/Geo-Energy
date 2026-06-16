@@ -1,0 +1,75 @@
+[
+  {
+    "name": "find_sites",
+    "description": "Score and rank parcels for a renewable project near a Kern County place, then show them on the map and results list.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "place": { "type": "string", "description": "A Kern County place, e.g. Mojave, Bakersfield, Tehachapi." },
+        "use_case": {
+          "type": "string",
+          "enum": ["utility_solar", "data_center"],
+          "description": "What to site. Defaults to utility_solar."
+        }
+      },
+      "required": ["place"]
+    }
+  },
+  {
+    "name": "focus_map",
+    "description": "Pan and zoom the map to a Kern County place without scoring.",
+    "parameters": {
+      "type": "object",
+      "properties": { "place": { "type": "string", "description": "A Kern County place name." } },
+      "required": ["place"]
+    }
+  },
+  {
+    "name": "check_affordability",
+    "description": "Check live land affordability for the area: median home value, year-over-year price trend, and an affordability rating. County-level for Kern (the same figure regardless of the exact place).",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "place": { "type": "string", "description": "A Kern County place for context (optional); the figure is county-wide." }
+      },
+      "required": []
+    }
+  },
+  {
+    "name": "explain_parcel",
+    "description": "Explain why a specific parcel scored the way it did — its top contributing factors and any hard exclusions. Use a parcel id from a prior find_sites result.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "parcel_id": { "type": "number", "description": "The parcel id from a find_sites result." },
+        "use_case": { "type": "string", "enum": ["utility_solar", "data_center"], "description": "Defaults to utility_solar." }
+      },
+      "required": ["parcel_id"]
+    }
+  },
+  {
+    "name": "grid_context",
+    "description": "Summarize the CAISO interconnection queue for Kern County — total queued megawatts and the leading technologies. Background context, not part of scoring.",
+    "parameters": { "type": "object", "properties": {}, "required": [] }
+  },
+  {
+    "name": "focus_parcel",
+    "description": "Zoom and pan the map to a specific parcel and select it. Use a parcel id from a find_sites result.",
+    "parameters": {
+      "type": "object",
+      "properties": { "parcel_id": { "type": "number", "description": "The parcel id to zoom to." } },
+      "required": ["parcel_id"]
+    }
+  },
+  {
+    "name": "export_pdf",
+    "description": "Generate a downloadable PDF report of one or more parcels (score, factor breakdown, grid context). Pass comma-separated parcel ids, or leave empty for all parcels currently shown.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "parcel_ids": { "type": "string", "description": "Comma-separated parcel ids; empty means all shown." }
+      },
+      "required": []
+    }
+  }
+]

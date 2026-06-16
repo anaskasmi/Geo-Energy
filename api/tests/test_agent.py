@@ -55,6 +55,28 @@ def _clear_store():
     at.area_store.clear()
 
 
+_AFFORD_OK = {
+    "ok": True,
+    "median_home_value_usd": 310600,
+    "acs_vintage": "2023 ACS 5-year",
+    "hpi_index": 324.07,
+    "price_trend_yoy_pct": 4.6,
+    "hpi_as_of": "2024",
+    "sources": ["Census ACS5 B25077_001E", "FRED ATNHPIUS06029A"],
+}
+
+
+@pytest.fixture(autouse=True)
+def _stub_landvalue(monkeypatch):
+    """Keep every agent test hermetic: the live check_affordability call returns canned data.
+
+    TestModel auto-calls EVERY registered tool, so without this the full-loop test would hit the
+    real FRED/Census APIs over the network.
+    """
+    monkeypatch.setattr(at.landvalue, "area_affordability", lambda **kw: dict(_AFFORD_OK))
+    yield
+
+
 def _engine_fc(use_case: str = "utility_solar") -> dict:
     """The exact FeatureCollection the local engine produces for the bbox (for equality asserts)."""
     con = db.connect(db.artifact_path(), read_only=True)
@@ -143,6 +165,106 @@ def test_agent_deterministic_function_model(client):
     # resolve_area label surfaced on the result.
     assert result["data"]["area"] == "custom bounding box"
     assert types[-1] == "done"
+
+
+# --- 2b) Affordability flow: resolve -> check_affordability -> score_parcels(affordability) ---
+def test_agent_affordability_flow(client):
+    """Force the affordability turn and assert the SSE protocol + blended result.
+
+    The `result` event carries BOTH the ranked FeatureCollection AND the affordability summary;
+    passing affordability_score=1.0 to score_parcels lifts every score above the plain engine.
+    """
+    calls = {"n": 0}
+
+    async def stream_fn(messages: list, info: AgentInfo):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            yield {0: DeltaToolCall(name="resolve_area", json_args=json.dumps({"text": _BBOX}))}
+        elif calls["n"] == 2:
+            yield {0: DeltaToolCall(name="check_affordability", json_args=json.dumps({"area_ref": _BBOX}))}
+        elif calls["n"] == 3:
+            yield {0: DeltaToolCall(
+                name="score_parcels",
+                json_args=json.dumps(
+                    {"area_ref": _BBOX, "use_case": "utility_solar", "affordability_score": 1.0}
+                ),
+            )}
+        else:
+            for chunk in ("Affordable ", "area."):
+                yield chunk
+
+    with agent_mod.get_agent().override(model=FunctionModel(stream_function=stream_fn)):
+        resp = client.post("/api/agent", json={"message": "is this area affordable? rank solar"})
+    assert resp.status_code == 200, resp.text
+
+    events = parse_sse(resp.text)
+    step_tools = [e["data"]["tool"] for e in events if e["event"] == "step"]
+    assert step_tools == ["resolve_area", "check_affordability", "score_parcels"]
+    aff_step = next(e for e in events if e["event"] == "step" and e["data"]["tool"] == "check_affordability")
+    assert aff_step["data"]["phase"] == "checking_affordability"
+
+    result = next(e for e in events if e["event"] == "result")["data"]
+    assert result["affordability"]["type"] == "Affordability"
+    assert result["affordability"]["median_home_value_usd"] == 310600
+
+    fc = result["featureCollection"]
+    assert {f["properties"]["id"] for f in fc["features"]} == {1, 2, 7}
+    plain = {f["properties"]["id"]: f["properties"]["score"] for f in _engine_fc("utility_solar")["features"]}
+    for f in fc["features"]:
+        assert f["properties"]["score"] >= plain[f["properties"]["id"]]  # affordability lifted it
+    assert [e["event"] for e in events][-1] == "done"
+
+
+def test_agent_drawn_area_forwarded_to_model(client):
+    """A drawn polygon in the request is resolved to a token and surfaced to the model.
+
+    The model echoes the injected map-context area_ref into its narration, proving the SELECTED
+    area reached it (no resolve_area needed).
+    """
+    seen = {"ref": None}
+
+    async def stream_fn(messages: list, info: AgentInfo):
+        # The first user message carries the injected "[map context] ... area_ref \"area_…\"" line.
+        text = "".join(
+            getattr(p, "content", "") for m in messages for p in getattr(m, "parts", []) if isinstance(getattr(p, "content", None), str)
+        )
+        import re
+
+        m = re.search(r'area_ref is "(area_[0-9a-f]+)"', text)
+        seen["ref"] = m.group(1) if m else None
+        for chunk in ("Using your ", "selected area."):
+            yield chunk
+
+    geom = {
+        "type": "Polygon",
+        "coordinates": [[[-119.05, 35.28], [-118.93, 35.28], [-118.93, 35.33], [-119.05, 35.33], [-119.05, 35.28]]],
+    }
+    with agent_mod.get_agent().override(model=FunctionModel(stream_function=stream_fn)):
+        resp = client.post("/api/agent", json={"message": "score this area", "area_geometry": geom})
+    assert resp.status_code == 200, resp.text
+    assert seen["ref"] is not None and seen["ref"].startswith("area_")
+    # The token resolves back to the drawn geometry server-side.
+    assert at.area_store.get(seen["ref"]) is not None
+
+
+# --- 2c) /api/affordability endpoint (parity: voice agent reaches the same capability) -------
+def test_affordability_endpoint(client):
+    r = client.get("/api/affordability")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["type"] == "Affordability"
+    assert body["median_home_value_usd"] == 310600
+    assert body["affordability_band"] == "affordable"
+    assert 0.6 <= body["affordability_score"] <= 0.7
+
+
+def test_affordability_endpoint_unavailable(client, monkeypatch):
+    monkeypatch.setattr(at.landvalue, "area_affordability", lambda **kw: {"ok": False, "error": "down"})
+    r = client.get("/api/affordability")
+    assert r.status_code == 200  # degrades cleanly, never a 5xx
+    body = r.json()
+    assert body["available"] is False
+    assert "error" in body
 
 
 # --- 3) Provider switch: uninstalled provider -> graceful error (no 500/stacktrace) ----------

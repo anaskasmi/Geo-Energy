@@ -3,20 +3,25 @@ import type { FormEvent, KeyboardEvent } from "react";
 import Lottie from "lottie-react";
 import { Mic, PanelLeftClose, Send, Sparkles } from "lucide-react";
 
-import { apiClient } from "../api/client";
-import type { UseCase } from "../api/client";
 import { useMapStore } from "../map/useMapStore";
-import { PLACE_LABELS, resolvePlace } from "../map/places";
+import { PLACE_LABELS } from "../map/places";
 import emptyAnimation from "../assets/lottie/empty-chat.json";
 import { Icon } from "../components/Icon";
+import { AffordabilityCard } from "./AffordabilityCard";
 import { PHASE_LABELS, SUGGESTIONS } from "./agentClient";
 import { BotAvatar } from "./BotAvatar";
 import { Markdown } from "./Markdown";
 import type { ParcelRef } from "./types";
 import { useAgentChat } from "./useAgentChat";
+import voiceTools from "./voiceTools.json";
+import { makeVoiceExecutors } from "./voiceExecutors";
+import type { VoiceToolName } from "./voiceExecutors";
 import { VoicePanel } from "./voice/VoicePanel";
 import { useVoiceMode } from "./voice/useVoiceMode";
 import type { VoiceTool } from "./voice/voiceTypes";
+
+/** Shape of one entry in voiceTools.json (the voice-surface mirror of the Python REGISTRY). */
+type VoiceToolMeta = { name: string; description: string; parameters: Record<string, unknown> };
 
 const VOICE_INSTRUCTIONS = `You are the voice assistant for a renewable-energy site-selection app focused on Kern County, California. You help users find good parcels for utility-scale solar farms and data centers.
 
@@ -26,7 +31,8 @@ Voice rules:
 - Reference the screen naturally, e.g. "I've put the top sites on the map."
 - No markdown, bullet points, or special characters — your words are spoken aloud.
 
-When the user asks to find, score, or rank sites, call find_sites with the place and use_case. When they only want to look at an area, call focus_map.
+When the user asks to find, score, or rank sites, call find_sites with the place and use_case. When they only want to look at an area, call focus_map. For land affordability or cost, call check_affordability. To explain why a specific parcel scored as it did, call explain_parcel with its id (from a prior find_sites result). For grid or interconnection-queue background, call grid_context. To zoom to a specific parcel, call focus_parcel with its id. To create a downloadable PDF of one or more parcels, call export_pdf (comma-separated ids, or empty for all parcels currently shown).
+If asked where the data comes from: parcels and zoning are from Kern County GEODAT, terrain slope from USGS 3DEP, solar resource from NREL, transmission and substations from HIFLD, flood zones from FEMA, the interconnection queue from CAISO, and land affordability from the FHFA price index via FRED plus US Census home values.
 Places you cover: ${PLACE_LABELS.join(", ")}. If they name somewhere else, say you only cover Kern County for now.`;
 
 /**
@@ -38,75 +44,36 @@ Places you cover: ${PLACE_LABELS.join(", ")}. If they name somewhere else, say y
  */
 export function AgentPanel({ onClose }: { onClose?: () => void }) {
   const { messages, send, busy } = useAgentChat();
-  const { setSelected, flyTo, setScoreResult, setScoreStatus, setUseCase } = useMapStore();
+  const { setSelected, flyTo, setScoreResult, setScoreStatus, setUseCase, scoreResult, useCase, captureMapSnapshot } =
+    useMapStore();
   const [input, setInput] = useState("");
   const logRef = useRef<HTMLDivElement | null>(null);
   const taRef = useRef<HTMLTextAreaElement | null>(null);
 
-  // Tools the voice agent may call — they run locally and drive the real map + results list, then
-  // hand a compact summary back to the model so it can speak the takeaway.
+  // Voice tools = shared-registry metadata (voiceTools.json, the mirror of the Python REGISTRY)
+  // zipped with the client-side executors (voiceExecutors.ts). Adding/removing a voice tool means
+  // editing those two files; the Python parity test + tsc Record<VoiceToolName,…> exhaustiveness keep
+  // this in lockstep with the text agent (GEO-42). Executors run locally and drive the real map +
+  // results list, then hand a compact summary back to the model so it can speak the takeaway.
   const tools = useMemo<VoiceTool[]>(() => {
-    const findSites: VoiceTool = {
-      name: "find_sites",
-      description:
-        "Score and rank parcels for a renewable project near a Kern County place, then show them on the map and results list.",
-      parameters: {
-        type: "object",
-        properties: {
-          place: { type: "string", description: "A Kern County place, e.g. Mojave, Bakersfield, Tehachapi." },
-          use_case: {
-            type: "string",
-            enum: ["utility_solar", "data_center"],
-            description: "What to site. Defaults to utility_solar.",
-          },
-        },
-        required: ["place"],
-      },
-      execute: async (args) => {
-        const place = String(args.place ?? "");
-        const useCase: UseCase = args.use_case === "data_center" ? "data_center" : "utility_solar";
-        const resolved = resolvePlace(place);
-        if (!resolved) return { error: `No data for "${place}".`, known_places: PLACE_LABELS };
-        setUseCase(useCase);
-        setScoreStatus("scoring");
-        try {
-          const fc = await apiClient.score({ geometry: resolved.geometry, use_case: useCase });
-          setScoreResult(fc);
-          setScoreStatus("done");
-          flyTo(resolved.center, 10);
-          const feats = fc.features ?? [];
-          return {
-            place: resolved.label,
-            use_case: useCase,
-            count: feats.length,
-            top: feats.slice(0, 3).map((f) => ({
-              apn: f.properties.apn,
-              score: Math.round(f.properties.score),
-            })),
-          };
-        } catch {
-          setScoreStatus("error", "Scoring failed.");
-          return { error: "Scoring failed for that area." };
-        }
-      },
-    };
-    const focusMap: VoiceTool = {
-      name: "focus_map",
-      description: "Pan and zoom the map to a Kern County place without scoring.",
-      parameters: {
-        type: "object",
-        properties: { place: { type: "string", description: "A Kern County place name." } },
-        required: ["place"],
-      },
-      execute: async (args) => {
-        const resolved = resolvePlace(String(args.place ?? ""));
-        if (!resolved) return { error: "Unknown place.", known_places: PLACE_LABELS };
-        flyTo(resolved.center, 11);
-        return { ok: true, place: resolved.label };
-      },
-    };
-    return [findSites, focusMap];
-  }, [flyTo, setScoreResult, setScoreStatus, setUseCase]);
+    const execs = makeVoiceExecutors({
+      flyTo,
+      setSelected,
+      setScoreResult,
+      setScoreStatus,
+      setUseCase,
+      scoreResult,
+      useCase,
+      captureMapSnapshot,
+    });
+    return (voiceTools as VoiceToolMeta[]).map((m) => ({
+      name: m.name,
+      description: m.description,
+      parameters: m.parameters,
+      // Safe cast: the parity test guarantees voiceTools.json names ⊆ VoiceToolName.
+      execute: execs[m.name as VoiceToolName],
+    }));
+  }, [flyTo, setSelected, setScoreResult, setScoreStatus, setUseCase, scoreResult, useCase, captureMapSnapshot]);
 
   const voice = useVoiceMode({ instructions: VOICE_INSTRUCTIONS, tools });
   const showVoice = voice.state !== "idle";
@@ -208,6 +175,7 @@ export function AgentPanel({ onClose }: { onClose?: () => void }) {
                         {m.streaming && <span className="chat-cursor" aria-hidden="true" />}
                       </p>
                     )}
+                    {m.affordability && <AffordabilityCard data={m.affordability} />}
                     {m.refs && m.refs.length > 0 && (
                       <div className="chat-refs">
                         {m.refs.map((r) => (

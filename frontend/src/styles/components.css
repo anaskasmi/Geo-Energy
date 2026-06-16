@@ -1312,6 +1312,104 @@ kbd {
 .chat-ref:focus-visible {
   border-color: var(--accent);
 }
+
+/* Land-affordability card (GEO-41): area-level cost summary under an assistant message. */
+.afford-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+}
+.afford-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.afford-card__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+.afford-badge {
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.afford-badge--affordable {
+  background: var(--positive-subtle);
+  color: var(--positive);
+}
+.afford-badge--moderate {
+  background: var(--accent-subtle);
+  color: var(--accent-text);
+}
+.afford-badge--expensive {
+  background: var(--danger-subtle);
+  color: var(--danger-text);
+}
+.afford-badge--unknown {
+  background: var(--bg-sunken);
+  color: var(--text-muted);
+}
+.afford-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-2);
+  margin: 0;
+}
+.afford-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.afford-stat dt {
+  font-size: 10px;
+  color: var(--text-faint);
+}
+.afford-stat dd {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.afford-stat__trend {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.afford-meter {
+  height: 5px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-sunken);
+  overflow: hidden;
+}
+.afford-meter__fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width var(--dur-base) var(--ease-standard);
+}
+.afford-card__note {
+  margin: 0;
+  font-size: 10px;
+  line-height: 1.4;
+  color: var(--text-faint);
+}
+.afford-card__src {
+  color: var(--text-faint);
+}
 .chat-chips {
   display: flex;
   flex-wrap: wrap;

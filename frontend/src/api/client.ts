@@ -164,6 +164,23 @@ export interface ContextResponse {
   note: string;
 }
 
+/** Area-level land-affordability signal (GEO-41). `available:false` when the live data was unreachable. */
+export interface AffordabilityResponse {
+  type?: "Affordability";
+  available?: boolean;
+  error?: string;
+  geography?: string;
+  median_home_value_usd?: number | null;
+  acs_vintage?: string | null;
+  hpi_index?: number | null;
+  price_trend_yoy_pct?: number | null;
+  hpi_as_of?: string | null;
+  affordability_score?: number | null;
+  affordability_band?: string;
+  sources?: string[];
+  note?: string;
+}
+
 export const apiClient = {
   baseUrl: API_BASE_URL,
   /** Liveness/readiness probe (GEO-15 exposes /api/health). */
@@ -183,6 +200,8 @@ export const apiClient = {
     }),
   /** CAISO Kern interconnection-queue context (GEO-17). */
   context: (signal?: AbortSignal) => request<ContextResponse>("context", { signal }),
+  /** Live, area-level land-affordability signal for Kern County (GEO-41). */
+  affordability: (signal?: AbortSignal) => request<AffordabilityResponse>("affordability", { signal }),
 };
 
 export type ApiClient = typeof apiClient;

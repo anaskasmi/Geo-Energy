@@ -14,9 +14,14 @@ and the agent constructable even when the provider package or key is absent; onl
 errors, and it does so gracefully as an SSE ``error`` event (never a 500 / stacktrace).
 
 SECURITY (hard constraints):
-  * ``GOOGLE_API_KEY`` / ``ANTHROPIC_API_KEY`` / ``OPENAI_API_KEY`` are NEVER logged, repr'd, put
-    in an error message, or emitted in any SSE event (see :func:`_redact`).
-  * Network is used ONLY for the LLM call on this request path; the tools/engine stay fully local.
+  * ``GOOGLE_API_KEY`` / ``ANTHROPIC_API_KEY`` / ``OPENAI_API_KEY`` / ``FRED_API_KEY`` /
+    ``CENSUS_API_KEY`` are NEVER logged, repr'd, put in an error message, or emitted in any SSE
+    event (see :func:`_redact`).
+  * Network is used ONLY for the LLM call on this request path — with ONE deliberate, scoped
+    exception (GEO-41): the ``check_affordability`` tool fetches a free public land-value signal
+    (FRED + Census, via :mod:`app.landvalue`). That call is hardened like :mod:`app.realtime`
+    (short timeout, key-safe, never raises) and isolated to that single tool; the scoring engine
+    and every other tool stay fully local (FR-A5).
   * Tool wrappers catch :class:`ToolError` and hand the model a structured error so it can recover
     and narrate, instead of crashing the stream.
 
@@ -57,7 +62,13 @@ log = logging.getLogger("api.agent")
 DEFAULT_AGENT_MODEL = "google:gemini-3.5-flash"
 
 # Secret env vars we must scrub from any log/error line before it leaves the process.
-_SECRET_ENV_VARS = ("GOOGLE_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY")
+_SECRET_ENV_VARS = (
+    "GOOGLE_API_KEY",
+    "ANTHROPIC_API_KEY",
+    "OPENAI_API_KEY",
+    "FRED_API_KEY",
+    "CENSUS_API_KEY",
+)
 
 
 def _env_int(name: str, default: int) -> int:
@@ -132,6 +143,11 @@ class AgentRequest(BaseModel):
     model_config = {"extra": "forbid"}
 
     message: str = Field(..., min_length=1)
+    # The user's drawn search area (GeoJSON Polygon/MultiPolygon, EPSG:4326), optional. The route
+    # resolves it to an opaque area_ref server-side so the model operates on the SELECTED area; the
+    # model never receives coordinates (a nested dict is fine HERE — this is the request body, not a
+    # Gemini tool schema). Invalid geometry is ignored (chat degrades to text), never a hard 422.
+    area_geometry: dict | None = None
 
     @field_validator("message")
     @classmethod
@@ -162,12 +178,26 @@ _INSTRUCTIONS = (
     "You orchestrate local geospatial tools and narrate their results; you NEVER invent geometry, "
     "coordinates, parcel ids, or suitability scores — always obtain them from the tools. "
     "To rank parcels you MUST first call resolve_area to turn the user's place or area into an "
-    "area_ref token, then call score_parcels with that area_ref and the use_case. Use "
-    "explain_parcel for a single parcel's per-factor breakdown, and grid_context for "
-    "interconnection-queue background (never part of scoring). If a tool returns an 'error' field, "
-    "briefly tell the user what went wrong and suggest a fix (e.g. a clearer place name). Keep "
-    "answers concise — a few sentences. Do NOT dump raw JSON or coordinates; the UI renders the "
-    "map and the ranked table from the tool results."
+    "area_ref token, then call score_parcels with that area_ref and the use_case. If a map-context "
+    "line gives you a selected area_ref, use it directly (skip resolve_area) unless the user names "
+    "a different place. Use explain_parcel for a single parcel's per-factor breakdown, and "
+    "grid_context for interconnection-queue background (never part of scoring). "
+    "For land affordability/cost questions about the area, call check_affordability with the "
+    "area_ref; it returns an area-level affordability_score (0..1, higher = cheaper land) from live "
+    "public data. To factor affordability into the ranking, pass that affordability_score to "
+    "score_parcels. Note check_affordability is county-level (the same for any sub-area in Kern). "
+    "To zoom the map to a specific parcel, call focus_parcel with its id. To produce a downloadable "
+    "PDF report of one or more parcels, call export_pdf with a comma-separated list of parcel ids "
+    "(or empty for all parcels currently shown). "
+    "DATA PROVENANCE — if the user asks where the data comes from: parcels and zoning come from "
+    "Kern County GEODAT (the county assessor's open data); terrain slope from USGS 3DEP; the solar "
+    "resource (GHI) from NREL; transmission lines and substations from HIFLD; flood (SFHA) zones "
+    "from FEMA's National Flood Hazard Layer; the interconnection queue from CAISO; and land "
+    "affordability from the FHFA house-price index (via FRED) plus the US Census ACS median home "
+    "value (both listed in the check_affordability result's 'sources'). "
+    "If a tool returns an 'error' field, briefly tell the user what went wrong and suggest a fix "
+    "(e.g. a clearer place name). Keep answers concise — a few sentences. Do NOT dump raw JSON or "
+    "coordinates; the UI renders the map and the ranked table from the tool results."
 )
 
 
@@ -210,11 +240,14 @@ def _register_tools(agent: Agent) -> None:
         min_acres: float | None = None,
         max_slope_pct: float | None = None,
         limit: int = 200,
+        affordability_score: float | None = None,
     ) -> dict:
         """Rank parcels in a resolved area by suitability (0-100) for a use case.
 
         Geometry is NEVER passed here — resolve the area first and pass its area_ref. The local
         engine computes all geometry and scores. Returns a ranked GeoJSON FeatureCollection.
+        Pass affordability_score (0..1, from check_affordability) to fold land affordability into
+        the ranking.
         """
         try:
             with ctx.deps.lock:
@@ -225,7 +258,29 @@ def _register_tools(agent: Agent) -> None:
                     min_acres=min_acres,
                     max_slope_pct=max_slope_pct,
                     limit=limit,
+                    affordability_score=affordability_score,
                     zoning_rules=ctx.deps.zoning_rules,
+                )
+        except at.ToolError as exc:
+            return {"error": str(exc)}
+
+    @agent.tool
+    def check_affordability(
+        ctx: RunContext[Deps],
+        area_ref: str,
+        use_case: UseCase = "utility_solar",
+    ) -> dict:
+        """Live, area-level land-affordability check for the selected area.
+
+        Fetches a free public land-cost signal (Census median home value + FHFA price trend) for
+        Kern County and returns an affordability_score (0..1, higher = cheaper land). This is the
+        one tool that uses the network on the request path; it is county-level (the same for any
+        sub-area in Kern). Pass the returned affordability_score to score_parcels to rank by it.
+        """
+        try:
+            with ctx.deps.lock:
+                return at.check_affordability(
+                    ctx.deps.cur, area_ref=area_ref, use_case=use_case
                 )
         except at.ToolError as exc:
             return {"error": str(exc)}
@@ -254,6 +309,26 @@ def _register_tools(agent: Agent) -> None:
         try:
             with ctx.deps.lock:
                 return at.grid_context(ctx.deps.cur)
+        except at.ToolError as exc:
+            return {"error": str(exc)}
+
+    @agent.tool
+    def focus_parcel(ctx: RunContext[Deps], parcel_id: int) -> dict:
+        """Zoom/pan the map to a specific parcel and select it. Use an id from score_parcels."""
+        try:
+            with ctx.deps.lock:
+                return at.focus_parcel(ctx.deps.cur, parcel_id=parcel_id)
+        except at.ToolError as exc:
+            return {"error": str(exc)}
+
+    @agent.tool
+    def export_pdf(ctx: RunContext[Deps], parcel_ids: str = "") -> dict:
+        """Generate a downloadable PDF of one or more parcels (the UI renders it).
+
+        Pass a comma-separated list of parcel ids, or leave empty for all parcels currently shown.
+        """
+        try:
+            return at.export_pdf(parcel_ids=parcel_ids)
         except at.ToolError as exc:
             return {"error": str(exc)}
 
@@ -308,13 +383,11 @@ SSE_HEADERS = {
     "Connection": "keep-alive",
 }
 
-# Map a tool name to the coarse phase the UI shows in a `step` event.
-_PHASE = {
-    "resolve_area": "resolving_area",
-    "score_parcels": "scoring",
-    "explain_parcel": "explaining",
-    "grid_context": "grid_context",
-}
+# Tool name -> UI step phase, and tool name -> SSE result routing. BOTH are DERIVED from the shared
+# REGISTRY (app.agent_tools) so a tool defined once is automatically wired here — no hand-maintained
+# parallel maps to drift (GEO-42).
+_PHASE = {t.name: t.phase for t in at.REGISTRY if t.phase}
+_CAPTURE = {t.name: t.result for t in at.REGISTRY if t.result is not None}
 
 
 def _sse(event: str, data: dict) -> str:
@@ -329,6 +402,7 @@ async def stream_agent(
     con: Any,
     zoning_rules: dict,
     agent: Agent | None = None,
+    selected_area_ref: str | None = None,
 ) -> AsyncIterator[str]:
     """Drive one agent run and yield the SSE event stream.
 
@@ -336,10 +410,13 @@ async def stream_agent(
     cursor on the shared read-only handle, bounds the run with a timeout, watches for client
     disconnect, and ALWAYS terminates with ``done`` (or ``error`` then ``done``) — never a 500.
     The ranked FeatureCollection is captured from the last ``score_parcels`` tool-result event and
-    emitted in the ``result`` event (assembled here, not from model text).
+    emitted in the ``result`` event (assembled here, not from model text); a ``check_affordability``
+    result rides along in the same event.
 
-    ``request`` only needs an awaitable ``is_disconnected()``; ``agent`` defaults to
-    :func:`get_agent` (override-friendly for tests).
+    ``selected_area_ref`` is the opaque token for the user's drawn area (pre-resolved by the route);
+    when present it is surfaced to the model as a map-context line so it operates on the SELECTED
+    area without re-parsing a place name. ``request`` only needs an awaitable ``is_disconnected()``;
+    ``agent`` defaults to :func:`get_agent` (override-friendly for tests).
     """
     sem = get_semaphore()
     if sem.locked():  # at capacity — refuse cleanly instead of opening another upstream call
@@ -350,8 +427,16 @@ async def stream_agent(
 
     await sem.acquire()
     cur = None
-    captured_fc: dict | None = None
-    captured_area: str | None = None
+    # SSE 'result' payload, accumulated from captured tool results (last-wins per key). Keyed by
+    # ResultSpec.sse_key (featureCollection / area / affordability / focus / exportPdf).
+    captured: dict[str, Any] = {}
+    if selected_area_ref:
+        # Prepend a clearly-delimited context line so the model uses the drawn area's token directly.
+        message = (
+            f"[map context] The user has a drawn/selected area on the map; its area_ref is "
+            f'"{selected_area_ref}". Use this area_ref directly with score_parcels / '
+            f"check_affordability unless the user names a different place.\n\n{message}"
+        )
     try:
         if con is None:  # tolerant-startup: no artifact -> clean error, never 503/500 mid-stream
             yield _sse("error", {"message": "the scoring database is unavailable"})
@@ -389,16 +474,18 @@ async def stream_agent(
                                         name = ev.part.tool_name
                                         yield _sse("step", {"phase": _PHASE.get(name, name), "tool": name})
                                     elif isinstance(ev, FunctionToolResultEvent):
-                                        name = ev.part.tool_name
+                                        # Table-driven capture (GEO-42): route the result per the
+                                        # tool's ResultSpec instead of a hand-written if/elif chain.
+                                        spec = _CAPTURE.get(ev.part.tool_name)
                                         content = ev.part.content
                                         if (
-                                            name == "score_parcels"
+                                            spec is not None
                                             and isinstance(content, dict)
-                                            and content.get("type") == "FeatureCollection"
+                                            and (spec.type_tag is None or content.get("type") == spec.type_tag)
                                         ):
-                                            captured_fc = content  # last score_parcels wins
-                                        elif name == "resolve_area" and isinstance(content, dict):
-                                            captured_area = content.get("label") or captured_area
+                                            val = content if spec.field is None else content.get(spec.field)
+                                            if val:  # last-wins; skip empty (e.g. blank resolve_area label)
+                                                captured[spec.sse_key] = val
         except TimeoutError:
             log.warning("agent: run exceeded %.0fs timeout", timeout_seconds())
             yield _sse("error", {"message": "the request timed out, please try a narrower query"})
@@ -410,11 +497,10 @@ async def stream_agent(
             yield _sse("done", {})
             return
 
-        if captured_fc is not None:
-            payload: dict[str, Any] = {"featureCollection": captured_fc}
-            if captured_area:
-                payload["area"] = captured_area
-            yield _sse("result", payload)
+        # Emit a result event only when there's something actionable — the resolve_area "area"
+        # label alone never warrants one (it rides along with a real result, matching prior behavior).
+        if any(key != "area" for key in captured):
+            yield _sse("result", captured)
         yield _sse("done", {})
     finally:
         if cur is not None:

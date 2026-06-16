@@ -30,8 +30,13 @@ export function useVoiceMode(options: UseVoiceModeOptions) {
   const asstIdRef = useRef<string | null>(null); // current assistant transcript being streamed
   const idRef = useRef(0);
   const newId = () => `v${(idRef.current += 1)}`;
+  // Monotonic attempt counter. start() claims a generation; teardown() bumps it to CANCEL any
+  // in-flight start() — so a getUserMedia/SDP step that resolves AFTER the user hit "End voice"
+  // releases the mic it just acquired instead of leaking a live device behind an idle UI.
+  const genRef = useRef(0);
 
   const teardown = useCallback(() => {
+    genRef.current += 1; // invalidate any start() still in flight
     dcRef.current?.close();
     dcRef.current = null;
     pcRef.current?.getSenders().forEach((s) => s.track?.stop());
@@ -40,6 +45,7 @@ export function useVoiceMode(options: UseVoiceModeOptions) {
     micRef.current?.getTracks().forEach((t) => t.stop());
     micRef.current = null;
     if (audioRef.current) {
+      audioRef.current.pause();
       audioRef.current.srcObject = null;
       audioRef.current = null;
     }
@@ -137,11 +143,14 @@ export function useVoiceMode(options: UseVoiceModeOptions) {
 
   const start = useCallback(async () => {
     if (pcRef.current) return; // already connecting/active
+    const gen = (genRef.current += 1); // claim this attempt; teardown() bumps gen to cancel it
+    const cancelled = () => gen !== genRef.current; // true once stop()/teardown() superseded us
     setError(null);
     setTranscripts([]);
     setState("connecting");
 
     const session = await fetchRealtimeSession();
+    if (cancelled()) return; // ended while minting the session
     if (!session.configured) {
       setError("Voice mode needs an OpenAI API key. Add OPENAI_API_KEY to the server's .env.");
       setState("error");
@@ -157,8 +166,16 @@ export function useVoiceMode(options: UseVoiceModeOptions) {
     try {
       mic = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch {
-      setError("Microphone access was blocked. Allow the mic to use voice mode.");
-      setState("error");
+      if (!cancelled()) {
+        setError("Microphone access was blocked. Allow the mic to use voice mode.");
+        setState("error");
+      }
+      return;
+    }
+    if (cancelled()) {
+      // The user ended voice while the mic was being acquired — release the device immediately,
+      // otherwise it stays hot with no connection to stop it (the reported leak).
+      mic.getTracks().forEach((t) => t.stop());
       return;
     }
     micRef.current = mic;
@@ -217,7 +234,9 @@ export function useVoiceMode(options: UseVoiceModeOptions) {
 
     try {
       const offer = await pc.createOffer();
+      if (cancelled()) return; // teardown() already closed pc + released the mic
       await pc.setLocalDescription(offer);
+      if (cancelled()) return;
       const answer = await fetch(OPENAI_REALTIME_CALLS_URL, {
         method: "POST",
         body: offer.sdp,
@@ -226,12 +245,15 @@ export function useVoiceMode(options: UseVoiceModeOptions) {
           "Content-Type": "application/sdp",
         },
       });
+      if (cancelled()) return;
       if (!answer.ok) {
         throw new Error(`SDP exchange failed (${answer.status})`);
       }
       const sdp = await answer.text();
+      if (cancelled()) return;
       await pc.setRemoteDescription({ type: "answer", sdp });
     } catch {
+      if (cancelled()) return; // a stop() during the handshake already cleaned up
       teardown();
       setError("Couldn't connect the voice session. Please try again.");
       setState("error");

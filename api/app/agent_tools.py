@@ -25,11 +25,12 @@ import math
 import re
 import threading
 from collections import OrderedDict
+from dataclasses import dataclass
 from typing import Any
 
 import duckdb
 
-from app import scoring, serialize
+from app import landvalue, scoring, serialize
 from app.models import MAX_POSITIONS, _GEOMETRY_TYPES, _count_positions
 
 
@@ -344,12 +345,20 @@ def score_parcels(
     zoning_rules: dict | None = None,
     limit: int = 200,
     offset: int = 0,
+    affordability_score: float | None = None,
+    affordability_weight: float | None = None,
 ) -> dict:
     """Rank parcels in an area for a use case (calls the scoring engine; never computes geometry).
 
     Returns the same ranked GeoJSON ``FeatureCollection`` (+ ``meta``) as POST /api/score. Geometry
     comes from ``area_ref`` (preferred) or an explicit ``geometry``. Raises :class:`ToolError` for
     bad parameters (mapped from :class:`scoring.ScoringError`).
+
+    ``affordability_score`` (0..1, from :func:`check_affordability`) optionally folds the area's
+    land affordability into the suitability score via an order-preserving convex blend (see
+    :func:`scoring.blend_affordability`) — cheaper land lifts the score. It is AREA-level (uniform
+    across the area), so it shifts scores without reordering parcels within a single area; the local
+    engine and the candidate ranking are untouched (FR-A5 holds — no network here).
     """
     geom = _resolve_geometry(cur, area_ref, geometry)
     threshold_overrides = {
@@ -393,7 +402,98 @@ def score_parcels(
         "limit": limit,
         "offset": offset,
     }
-    return serialize.score_feature_collection(rows, offset=offset, meta=meta)
+    fc = serialize.score_feature_collection(rows, offset=offset, meta=meta)
+    if affordability_score is not None:
+        _apply_affordability(fc, affordability_score, affordability_weight)
+    return fc
+
+
+def _apply_affordability(fc: dict, affordability_score: float, weight: float | None) -> None:
+    """Blend an area-level ``affordability_score`` (0..1) into each feature's score, in place.
+
+    Order-preserving (uniform affine blend), so ranks are unchanged — only the displayed scores
+    shift toward the area's affordability. Records what was applied in ``fc['meta']``.
+    """
+    try:
+        aff = float(affordability_score)
+    except (TypeError, ValueError) as exc:
+        raise ToolError("affordability_score must be a number in [0, 1]") from exc
+    if not math.isfinite(aff) or not (0.0 <= aff <= 1.0):
+        raise ToolError("affordability_score must be a number in [0, 1]")
+    w = scoring.AFFORDABILITY_WEIGHT_DEFAULT if weight is None else float(weight)
+    for feat in fc.get("features", []):
+        score = feat["properties"].get("score")
+        if score is not None:
+            feat["properties"]["score"] = round(scoring.blend_affordability(score, aff, w), 1)
+    fc.setdefault("meta", {})["affordability"] = {
+        "applied": True,
+        "affordability_score": round(aff, 3),
+        "weight": round(min(max(w, 0.0), 1.0), 3),
+    }
+
+
+def check_affordability(
+    cur, *, area_ref: str | None = None, geometry: dict | None = None, use_case: str = "utility_solar"
+) -> dict:
+    """Live, area-level land-affordability check for the selected area (GEO-41).
+
+    The ONE outbound-network agent tool (scoped FR-A5 exception): fetches a Kern-County
+    land/property-cost signal from free public APIs (FHFA price trend via FRED + Census ACS median
+    home value) and derives an ``affordability_score`` in [0, 1] (higher = cheaper land). Pass that
+    score to :func:`score_parcels` to fold affordability into the ranking.
+
+    ``area_ref``/``geometry`` ties the check to the user's selection (and validates a stale token);
+    the free data is COUNTY-level, so the result is the same for any sub-area drawn inside Kern —
+    surfaced honestly in ``note``. Raises :class:`ToolError` if the area is invalid or the data
+    services are unreachable, so the agent narrates a clean failure.
+    """
+    # Validate the area (also catches a stale/unknown token) — the signal itself is county-wide.
+    if area_ref or geometry:
+        _resolve_geometry(cur, area_ref, geometry)
+
+    data = landvalue.area_affordability()
+    if not data.get("ok"):
+        raise ToolError(data.get("error") or "live land-value data is unavailable")
+
+    ref = area_ref if (area_ref and area_ref.startswith("area_")) else None
+    return affordability_summary(data, area_ref=ref)
+
+
+def affordability_summary(data: dict, *, area_ref: str | None = None) -> dict:
+    """Shape an ``ok`` :func:`landvalue.area_affordability` result into the public Affordability dict.
+
+    Shared by the agent's :func:`check_affordability` tool and the ``/api/affordability`` endpoint so
+    the voice and text surfaces (and their cards) get an IDENTICAL shape. Adds the derived 0..1
+    ``affordability_score`` + a coarse band, and the honest county-level caveat.
+    """
+    median = data.get("median_home_value_usd")
+    aff = scoring.affordability_score_from_median(median)
+    if aff is None:
+        band = "unknown"
+    elif aff >= 0.6:
+        band = "affordable"
+    elif aff >= 0.35:
+        band = "moderate"
+    else:
+        band = "expensive"
+    return {
+        "type": "Affordability",
+        "area_ref": area_ref,
+        "geography": "Kern County, CA (FIPS 06029)",
+        "median_home_value_usd": median,
+        "acs_vintage": data.get("acs_vintage"),
+        "hpi_index": data.get("hpi_index"),
+        "price_trend_yoy_pct": data.get("price_trend_yoy_pct"),
+        "hpi_as_of": data.get("hpi_as_of"),
+        "affordability_score": round(aff, 3) if aff is not None else None,
+        "affordability_band": band,
+        "sources": data.get("sources", []),
+        "approximate": True,
+        "note": (
+            "Area-level land-cost signal from free public data (Census ACS median home value + "
+            "FHFA price trend); county-wide for Kern, not a per-parcel appraisal."
+        ),
+    }
 
 
 def explain_parcel(cur, *, parcel_id: int, use_case: str = "utility_solar", zoning_rules: dict | None = None) -> dict:
@@ -434,21 +534,106 @@ def grid_context(cur) -> dict:
     return serialize.context_response(rows)
 
 
-# --- Provider-agnostic, FLAT tool schemas (Pydantic-AI / Gemini / OpenAI all consume these) ----
-# Gemini's OpenAPI subset rejects unions/records/deep nesting, so every parameter here is a
-# scalar. GEO-21 binds `cur` + `zoning_rules` server-side; the model only ever supplies these.
+def focus_parcel(cur, *, parcel_id: int) -> dict:
+    """Look up a parcel's centroid so the UI can zoom/pan to it and select it. Raises if not found.
+
+    Returns a small ``{"type": "Focus", parcel_id, apn, centroid: [lng, lat]}`` the SSE handler
+    forwards to the client (the agent never moves the map itself — it just names the target).
+    """
+    try:
+        pid = int(parcel_id)
+    except (TypeError, ValueError) as exc:
+        raise ToolError("parcel_id must be an integer") from exc
+    sql = (
+        "SELECT id, apn, ST_X(centroid_4326) AS lng, ST_Y(centroid_4326) AS lat "
+        "FROM parcels WHERE id = $parcel_id"
+    )
+    try:
+        rows = _fetch(cur, sql, {"parcel_id": pid})
+    except duckdb.Error as exc:
+        raise ToolError("lookup temporarily unavailable") from exc
+    if not rows:
+        raise ToolError(f"parcel {pid} not found")
+    r = rows[0]
+    if r.get("lng") is None or r.get("lat") is None:
+        raise ToolError(f"parcel {pid} has no location")
+    return {
+        "type": "Focus",
+        "parcel_id": r["id"],
+        "apn": r.get("apn"),
+        "centroid": [_round6(r["lng"]), _round6(r["lat"])],
+    }
+
+
+def export_pdf(*, parcel_ids: str = "") -> dict:
+    """Request a client-side PDF report for one or more parcels (the BROWSER renders it).
+
+    ``parcel_ids`` is a comma-separated list of parcel ids; empty means "all parcels currently shown
+    in the results". This tool only relays the intent — the SPA builds the PDF from the ranked
+    results + /api/explain + /api/context (the agent/engine never renders a PDF itself). Returns
+    ``{"type": "ExportPdf", "parcel_ids": [...]}``; an empty list signals "all shown".
+    """
+    ids: list[int] = []
+    for tok in (parcel_ids or "").replace(";", ",").split(","):
+        tok = tok.strip()
+        if not tok:
+            continue
+        try:
+            ids.append(int(tok))
+        except ValueError as exc:
+            raise ToolError(f"invalid parcel id {tok!r}; use comma-separated integers") from exc
+    return {"type": "ExportPdf", "parcel_ids": ids}
+
+
+# --- Shared agent-tool REGISTRY (GEO-42) -------------------------------------------------------
+# ONE source of truth for the agent tools' shared contract + the TEXT (Gemini) surface. The VOICE
+# (OpenAI Realtime, client-side) surface is an ENFORCED MIRROR — frontend/src/agent/voiceTools.json
+# (metadata) + voiceExecutors.ts (bodies) — kept in sync by api/tests/test_tool_registry_parity.py
+# (asserts the LIVE Gemini schema == this registry AND the voice mirror matches) plus the frontend
+# tsc build (Record<VoiceToolName, …> exhaustiveness). Execution is per-runtime and CANNOT be
+# shared (text = in-process DuckDB; voice = browser REST); the registry shares the CONTRACT.
+#
+# Gemini's OpenAPI subset rejects unions/records/deep nesting, so every parameter is a flat scalar
+# (string/number/integer/boolean/enum). GEO-21 binds `cur` + `zoning_rules` server-side; the model
+# only ever supplies the parameters below. ``required`` MIRRORS each @agent.tool wrapper's actual
+# optionality (a defaulted param like ``use_case`` is NOT required) so the live-schema parity check
+# passes; the parity test fails loudly if a wrapper and its registry entry ever diverge.
 _USE_CASE_ENUM = list(scoring.SUPPORTED_USE_CASES)
 
-TOOL_SPECS: list[dict] = [
-    {
-        "name": "resolve_area",
-        "description": (
+
+@dataclass(frozen=True)
+class ResultSpec:
+    """How a tool's result is routed into the SSE ``result`` event (text surface only)."""
+
+    sse_key: str          # result field: featureCollection|area|affordability|focus|exportPdf
+    type_tag: str | None  # required content["type"] discriminator; None = no guard (resolve_area)
+    field: str | None     # None = forward the whole dict; else forward content[field] (e.g. "label")
+    relay: bool           # True = browser ACTS on the payload (focus/export); False = display/narrate
+
+
+@dataclass(frozen=True)
+class ToolDef:
+    """One agent tool's shared contract. ``parameters`` is a flat JSON-schema (scalars only)."""
+
+    name: str                  # canonical name == the text @agent.tool function name
+    description: str           # text/canonical description
+    parameters: dict           # flat JSON-schema
+    surfaces: tuple[str, ...]  # ("text",) | ("voice",) | ("text", "voice")
+    phase: str | None          # text-side UI step label key (None = no step)
+    result: ResultSpec | None  # text-side SSE routing (None = narrate-only, no capture)
+    parity: str                # "text_only" | "props" (mirror prop set) | "existence" (name only)
+
+
+REGISTRY: list[ToolDef] = [
+    ToolDef(
+        name="resolve_area",
+        description=(
             "Resolve a place in Kern County, CA to a search area. Accepts a city/area name "
             "(e.g. 'Mojave', 'Bakersfield'), 'Kern County' for the whole county, a "
             "'minLng,minLat,maxLng,maxLat' bounding box, or a 'lng,lat' point. Returns an "
             "area_ref token to pass to score_parcels. Call this BEFORE score_parcels."
         ),
-        "parameters": {
+        parameters={
             "type": "object",
             "properties": {
                 "text": {"type": "string", "description": "Place name, bounding box, or point."}
@@ -456,15 +641,19 @@ TOOL_SPECS: list[dict] = [
             "required": ["text"],
             "additionalProperties": False,
         },
-    },
-    {
-        "name": "score_parcels",
-        "description": (
+        surfaces=("text",),
+        phase="resolving_area",
+        result=ResultSpec("area", None, "label", False),
+        parity="text_only",
+    ),
+    ToolDef(
+        name="score_parcels",
+        description=(
             "Rank parcels in a resolved area by suitability (0-100) for a use case. Returns a "
             "ranked GeoJSON FeatureCollection. Geometry is NOT passed here — resolve the area "
             "first and pass its area_ref. The engine computes all geometry and scores."
         ),
-        "parameters": {
+        parameters={
             "type": "object",
             "properties": {
                 "area_ref": {"type": "string", "description": "Token from resolve_area."},
@@ -472,33 +661,131 @@ TOOL_SPECS: list[dict] = [
                 "min_acres": {"type": "number", "description": "Optional minimum parcel size override (acres)."},
                 "max_slope_pct": {"type": "number", "description": "Optional maximum slope override (percent)."},
                 "limit": {"type": "integer", "description": "Max results (1-1000, default 200)."},
+                "affordability_score": {
+                    "type": "number",
+                    "description": (
+                        "Optional 0..1 land-affordability score from check_affordability (higher = "
+                        "cheaper land). When set, folds the area's affordability into the suitability "
+                        "ranking."
+                    ),
+                },
             },
-            "required": ["area_ref", "use_case"],
+            "required": ["area_ref"],  # use_case is defaulted by the wrapper -> optional in the live schema
             "additionalProperties": False,
         },
-    },
-    {
-        "name": "explain_parcel",
-        "description": (
+        surfaces=("text",),  # voice peer is the find_sites composite (VOICE_ONLY_TOOLS)
+        phase="scoring",
+        result=ResultSpec("featureCollection", "FeatureCollection", None, False),
+        parity="text_only",
+    ),
+    ToolDef(
+        name="check_affordability",
+        description=(
+            "Check live, area-level LAND AFFORDABILITY for a resolved area (the user's selected "
+            "area). Returns a Kern-County land/property-cost signal from free public data (Census "
+            "median home value + FHFA price trend) and an affordability_score (0..1, higher = "
+            "cheaper). Pass that score to score_parcels to factor affordability into the ranking. "
+            "Resolve the area first and pass its area_ref."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "area_ref": {"type": "string", "description": "Token from resolve_area (the selected area)."},
+                "use_case": {"type": "string", "enum": _USE_CASE_ENUM, "description": "Scoring profile."},
+            },
+            "required": ["area_ref"],
+            "additionalProperties": False,
+        },
+        surfaces=("text", "voice"),
+        phase="checking_affordability",
+        result=ResultSpec("affordability", "Affordability", None, False),
+        parity="existence",  # voice uses a place-name param; text uses area_ref (divergent by design)
+    ),
+    ToolDef(
+        name="explain_parcel",
+        description=(
             "Explain one parcel's suitability: a per-factor breakdown (raw value, normalised "
             "score, weight, contribution) and which hard exclusions it fails, for a use case."
         ),
-        "parameters": {
+        parameters={
             "type": "object",
             "properties": {
                 "parcel_id": {"type": "integer", "description": "The parcel id (from score_parcels results)."},
                 "use_case": {"type": "string", "enum": _USE_CASE_ENUM, "description": "Scoring profile."},
             },
-            "required": ["parcel_id", "use_case"],
+            "required": ["parcel_id"],  # use_case is defaulted by the wrapper -> optional in the live schema
             "additionalProperties": False,
         },
-    },
-    {
-        "name": "grid_context",
-        "description": (
+        surfaces=("text", "voice"),
+        phase="explaining",
+        result=None,
+        parity="props",
+    ),
+    ToolDef(
+        name="grid_context",
+        description=(
             "Get the CAISO interconnection-queue summary for Kern County (totals, by technology, "
             "by status). Background context about grid congestion — not part of parcel scoring."
         ),
-        "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
-    },
+        parameters={"type": "object", "properties": {}, "additionalProperties": False},
+        surfaces=("text", "voice"),
+        phase="grid_context",
+        result=None,
+        parity="props",
+    ),
+    ToolDef(
+        name="focus_parcel",
+        description=(
+            "Zoom and pan the map to a specific parcel and select it. Use a parcel id from "
+            "score_parcels results."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "parcel_id": {"type": "integer", "description": "The parcel id to zoom to."}
+            },
+            "required": ["parcel_id"],
+            "additionalProperties": False,
+        },
+        surfaces=("text", "voice"),
+        phase="focusing_parcel",
+        result=ResultSpec("focus", "Focus", None, True),
+        parity="props",
+    ),
+    ToolDef(
+        name="export_pdf",
+        description=(
+            "Generate a downloadable PDF report of one or more parcels (score, per-factor "
+            "breakdown, grid context). Pass a comma-separated list of parcel ids (e.g. '5,12'), or "
+            "leave empty to include all parcels currently shown in the results."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "parcel_ids": {
+                    "type": "string",
+                    "description": "Comma-separated parcel ids; empty means all parcels shown.",
+                }
+            },
+            "required": [],
+            "additionalProperties": False,
+        },
+        surfaces=("text", "voice"),
+        phase="exporting_pdf",
+        result=ResultSpec("exportPdf", "ExportPdf", None, True),
+        parity="props",
+    ),
+]
+
+# Voice-only composites (no 1:1 text peer): find_sites ≈ resolve_area + score_parcels, focus_map.
+# Documented here so the parity test treats them as legitimate voice surface, not drift.
+VOICE_ONLY_TOOLS: tuple[str, ...] = ("find_sites", "focus_map")
+
+# Backwards-compatible derived view: the flat schemas the Gemini/text surface advertises. The live
+# tools are still built from the @agent.tool wrappers (see agent.py); this list is the documented
+# contract the parity test pins the wrappers to.
+TOOL_SPECS: list[dict] = [
+    {"name": t.name, "description": t.description, "parameters": t.parameters}
+    for t in REGISTRY
+    if "text" in t.surfaces
 ]

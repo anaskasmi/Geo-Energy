@@ -145,6 +145,133 @@ def test_score_parcels_requires_an_area(con):
         at.score_parcels(con, use_case="utility_solar")
 
 
+# --- check_affordability + affordability blend (GEO-41) ---------------------------------------
+_AFFORD_OK = {
+    "ok": True,
+    "median_home_value_usd": 310600,
+    "acs_vintage": "2023 ACS 5-year",
+    "hpi_index": 324.07,
+    "price_trend_yoy_pct": 4.6,
+    "hpi_as_of": "2024",
+    "sources": ["Census ACS5 B25077_001E", "FRED ATNHPIUS06029A"],
+}
+
+
+def test_check_affordability_returns_score(con, monkeypatch):
+    monkeypatch.setattr(at.landvalue, "area_affordability", lambda **kw: dict(_AFFORD_OK))
+    ref = at.resolve_area("-119.05,35.28,-118.93,35.33")["area_ref"]
+    out = at.check_affordability(con, area_ref=ref)
+    assert out["type"] == "Affordability"
+    assert out["median_home_value_usd"] == 310600
+    # median 310600 in [150k, 600k] -> aff = 1 - (310600-150000)/450000 ≈ 0.643
+    assert out["affordability_score"] == pytest.approx(0.643, abs=0.01)
+    assert out["affordability_band"] == "affordable"
+    assert out["sources"]
+    assert out["approximate"] is True
+
+
+def test_check_affordability_unavailable_raises(con, monkeypatch):
+    monkeypatch.setattr(
+        at.landvalue, "area_affordability", lambda **kw: {"ok": False, "error": "unreachable"}
+    )
+    ref = at.resolve_area("Mojave")["area_ref"]
+    with pytest.raises(at.ToolError):
+        at.check_affordability(con, area_ref=ref)
+
+
+def test_check_affordability_bad_area_ref_raises(con, monkeypatch):
+    # A stale/unknown token is caught BEFORE any network attempt.
+    monkeypatch.setattr(at.landvalue, "area_affordability", lambda **kw: dict(_AFFORD_OK))
+    with pytest.raises(at.ToolError):
+        at.check_affordability(con, area_ref="area_deadbeefdeadbeef")
+
+
+def test_check_affordability_missing_median_unknown_band(con, monkeypatch):
+    monkeypatch.setattr(
+        at.landvalue,
+        "area_affordability",
+        lambda **kw: {"ok": True, "median_home_value_usd": None, "hpi_index": 324.07,
+                      "sources": ["FRED ATNHPIUS06029A"]},
+    )
+    out = at.check_affordability(con, area_ref=at.resolve_area("Mojave")["area_ref"])
+    assert out["affordability_score"] is None
+    assert out["affordability_band"] == "unknown"
+
+
+def test_score_parcels_affordability_blend_preserves_order(con, zoning_rules):
+    base = at.score_parcels(con, geometry=SCORED_POLYGON, use_case="utility_solar", zoning_rules=zoning_rules)
+    base_ids = [f["properties"]["id"] for f in base["features"]]
+    base_scores = [f["properties"]["score"] for f in base["features"]]
+
+    # affordability_score=1.0 (cheapest) lifts every score toward 100; order is preserved.
+    blended = at.score_parcels(
+        con, geometry=SCORED_POLYGON, use_case="utility_solar",
+        zoning_rules=zoning_rules, affordability_score=1.0,
+    )
+    blend_ids = [f["properties"]["id"] for f in blended["features"]]
+    blend_scores = [f["properties"]["score"] for f in blended["features"]]
+
+    assert blend_ids == base_ids  # ranking unchanged (uniform affine blend)
+    assert all(b >= a for a, b in zip(base_scores, blend_scores))
+    assert blended["meta"]["affordability"] == {
+        "applied": True, "affordability_score": 1.0, "weight": 0.12,
+    }
+
+
+def test_score_parcels_affordability_zero_pulls_down(con, zoning_rules):
+    base = at.score_parcels(con, geometry=SCORED_POLYGON, use_case="utility_solar", zoning_rules=zoning_rules)
+    blended = at.score_parcels(
+        con, geometry=SCORED_POLYGON, use_case="utility_solar",
+        zoning_rules=zoning_rules, affordability_score=0.0,
+    )
+    bs = [f["properties"]["score"] for f in base["features"]]
+    zs = [f["properties"]["score"] for f in blended["features"]]
+    assert all(z <= b for b, z in zip(bs, zs))  # most-expensive area can only reduce scores
+
+
+def test_score_parcels_affordability_invalid_raises(con, zoning_rules):
+    with pytest.raises(at.ToolError):
+        at.score_parcels(
+            con, geometry=SCORED_POLYGON, use_case="utility_solar",
+            zoning_rules=zoning_rules, affordability_score=2.0,
+        )
+
+
+# --- focus_parcel + export_pdf (GEO-41 map control + PDF) -------------------------------------
+def test_focus_parcel_returns_centroid(con):
+    out = at.focus_parcel(con, parcel_id=1)
+    assert out["type"] == "Focus"
+    assert out["parcel_id"] == 1
+    lng, lat = out["centroid"]
+    # Parcel 1 centroid is near (-119.0375, 35.3025) in the conftest fixture.
+    assert -119.06 < lng < -119.0 and 35.29 < lat < 35.31
+
+
+def test_focus_parcel_not_found_raises(con):
+    with pytest.raises(at.ToolError):
+        at.focus_parcel(con, parcel_id=9999)
+
+
+def test_focus_parcel_non_integer_raises(con):
+    with pytest.raises(at.ToolError):
+        at.focus_parcel(con, parcel_id="abc")
+
+
+def test_export_pdf_parses_ids():
+    out = at.export_pdf(parcel_ids="5, 12 ;7")
+    assert out == {"type": "ExportPdf", "parcel_ids": [5, 12, 7]}
+
+
+def test_export_pdf_empty_means_all():
+    out = at.export_pdf(parcel_ids="")
+    assert out == {"type": "ExportPdf", "parcel_ids": []}
+
+
+def test_export_pdf_bad_id_raises():
+    with pytest.raises(at.ToolError):
+        at.export_pdf(parcel_ids="5,abc")
+
+
 # --- explain_parcel ---------------------------------------------------------------------------
 def test_explain_parcel_excluded(con, zoning_rules):
     out = at.explain_parcel(con, parcel_id=3, use_case="utility_solar", zoning_rules=zoning_rules)
@@ -177,7 +304,10 @@ def test_grid_context(con):
 # --- provider-agnostic tool schemas (FLAT, Gemini-safe) ---------------------------------------
 def test_tool_specs_present_and_named():
     names = {t["name"] for t in at.TOOL_SPECS}
-    assert names == {"resolve_area", "score_parcels", "explain_parcel", "grid_context"}
+    assert names == {
+        "resolve_area", "score_parcels", "check_affordability", "explain_parcel", "grid_context",
+        "focus_parcel", "export_pdf",
+    }
 
 
 def test_tool_specs_are_flat():

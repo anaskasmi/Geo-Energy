@@ -30,7 +30,8 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app import agent as agent_mod
-from app import db, perf, realtime as realtime_mod, scoring, serialize
+from app import agent_tools
+from app import db, landvalue, perf, realtime as realtime_mod, scoring, serialize
 from app.models import ScoreRequest, UseCase
 
 logging.basicConfig(
@@ -323,6 +324,21 @@ async def context(cur=Depends(get_cursor)) -> dict:
     return serialize.context_response(rows)
 
 
+@app.get("/api/affordability")
+async def affordability() -> dict:
+    """Live, area-level land-affordability signal for Kern County (GEO-41).
+
+    The same free-data signal the agent's ``check_affordability`` tool returns, exposed as a plain
+    GET so the VOICE agent (whose tools run client-side) has the SAME capability as the text agent.
+    County-level (Kern), so it takes no area. The outbound FRED/Census call runs in the threadpool;
+    on failure it returns ``{"available": false, "error": …}`` (200) so the caller degrades cleanly.
+    """
+    data = await run_in_threadpool(landvalue.area_affordability)
+    if not data.get("ok"):
+        return {"available": False, "error": data.get("error") or "live land-value data is unavailable"}
+    return agent_tools.affordability_summary(data)
+
+
 @app.post("/api/agent")
 async def agent_endpoint(req: agent_mod.AgentRequest, request: Request) -> StreamingResponse:
     """Streaming site-selection agent (GEO-21): Server-Sent Events over POST.
@@ -335,8 +351,20 @@ async def agent_endpoint(req: agent_mod.AgentRequest, request: Request) -> Strea
     """
     con = getattr(app.state, "con", None)
     zoning_rules = getattr(app.state, "zoning_rules", {}) or {}
+    # Resolve the user's drawn area (if any) to an opaque area_ref server-side, so the model
+    # operates on the SELECTED area without ever receiving coordinates. A bad polygon is ignored
+    # (the chat degrades to text), never a hard 422 that would break the whole turn.
+    selected_area_ref = None
+    if req.area_geometry is not None:
+        try:
+            selected_area_ref = agent_tools.area_store.put(
+                agent_tools.validate_geometry(req.area_geometry)
+            )
+        except agent_tools.ToolError as exc:
+            log.info("agent: ignoring invalid drawn area_geometry: %s", exc)
     generator = agent_mod.stream_agent(
         message=req.message, request=request, con=con, zoning_rules=zoning_rules,
+        selected_area_ref=selected_area_ref,
     )
     return StreamingResponse(
         generator, media_type="text/event-stream", headers=agent_mod.SSE_HEADERS,

@@ -31,10 +31,46 @@ function imageSize(dataUrl: string): Promise<{ w: number; h: number } | null> {
 }
 
 export async function exportParcelPdf(data: ParcelPdfData): Promise<void> {
-  const { selected, useCase, explain, context, snapshot } = data;
   const { jsPDF } = await import("jspdf");
   const doc = new jsPDF({ unit: "mm", format: "a4" });
+  await renderParcelPage(doc, data);
+  const idPart = String(data.selected.id).replace(/[^a-zA-Z0-9-]+/g, "-").slice(0, 24);
+  doc.save(exportFilename(data.useCase, "pdf", `parcel-${idPart}`));
+}
 
+/**
+ * Multi-parcel report (GEO-41 agent `export_pdf`): one A4 page per parcel, reusing the single-page
+ * layout. The map snapshot (current view) is placed on the FIRST page only to avoid repeating the
+ * same image. Saves a single combined PDF.
+ */
+export async function exportParcelsPdf(args: {
+  parcels: { selected: ParcelInfo; explain: ExplainResponse | null }[];
+  useCase: UseCase;
+  context: ContextResponse | null;
+  snapshot: string | null;
+}): Promise<void> {
+  const { parcels, useCase, context, snapshot } = args;
+  if (parcels.length === 1) {
+    return exportParcelPdf({ ...parcels[0], useCase, context, snapshot });
+  }
+  const { jsPDF } = await import("jspdf");
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  for (let i = 0; i < parcels.length; i++) {
+    if (i > 0) doc.addPage();
+    await renderParcelPage(doc, {
+      selected: parcels[i].selected,
+      useCase,
+      explain: parcels[i].explain,
+      context,
+      snapshot: i === 0 ? snapshot : null, // map view on page 1 only
+    });
+  }
+  doc.save(exportFilename(useCase, "pdf", `parcels-${parcels.length}`));
+}
+
+/** Draw one parcel's one-pager onto the current page of ``doc`` (shared by single + multi export). */
+async function renderParcelPage(doc: jsPDF, data: ParcelPdfData): Promise<void> {
+  const { selected, useCase, explain, context, snapshot } = data;
   const pageW = doc.internal.pageSize.getWidth();
   const margin = 16;
   const contentW = pageW - margin * 2;
@@ -148,10 +184,13 @@ export async function exportParcelPdf(data: ParcelPdfData): Promise<void> {
   const pageH = doc.internal.pageSize.getHeight();
   doc.setFontSize(8);
   doc.setTextColor(150);
-  doc.text(`Generated ${new Date().toLocaleString()} · Site-Selection App`, margin, pageH - 10);
-
-  const idPart = String(selected.id).replace(/[^a-zA-Z0-9-]+/g, "-").slice(0, 24);
-  doc.save(exportFilename(useCase, "pdf", `parcel-${idPart}`));
+  doc.text(
+    `Generated ${new Date().toLocaleString()} · Site-Selection App · Data: Kern County GEODAT, ` +
+      `USGS 3DEP, NREL, HIFLD, FEMA NFHL, CAISO`,
+    margin,
+    pageH - 10,
+  );
+  doc.setTextColor(0);
 }
 
 function printNote(doc: jsPDF, text: string, x: number, y: number): number {

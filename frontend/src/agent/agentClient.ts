@@ -1,6 +1,6 @@
-import type { ScoreFeatureCollection } from "../api/client";
+import type { GeoJsonGeometry, ScoreFeatureCollection } from "../api/client";
 import { API_BASE_URL } from "../config/env";
-import type { AgentStreamEvent } from "./types";
+import type { Affordability, AgentStreamEvent, ExportPdfRequest, FocusParcel } from "./types";
 
 /**
  * Live agent SSE client (GEO-21) — talks to the real `POST /api/agent` (Gemini via Pydantic AI,
@@ -24,12 +24,18 @@ export const PHASE_LABELS: Record<string, string> = {
   scoring: "Scoring parcels…",
   explaining: "Analyzing parcel…",
   grid_context: "Checking the grid queue…",
+  checking_affordability: "Checking land affordability…",
+  focusing_parcel: "Zooming to parcel…",
+  exporting_pdf: "Preparing PDF…",
 };
 
 export interface AgentHandlers {
   onStep?: (phase: string, tool: string) => void;
   onToken?: (text: string) => void;
   onResult?: (fc: ScoreFeatureCollection, area?: string) => void;
+  onAffordability?: (affordability: Affordability) => void;
+  onFocus?: (focus: FocusParcel) => void;
+  onExportPdf?: (request: ExportPdfRequest) => void;
   onError?: (message: string) => void;
   onDone?: () => void;
 }
@@ -64,8 +70,11 @@ function parseFrame(frame: string): AgentStreamEvent | null {
     case "result":
       return {
         type: "result",
-        featureCollection: data.featureCollection as ScoreFeatureCollection,
+        featureCollection: data.featureCollection as ScoreFeatureCollection | undefined,
         area: typeof data.area === "string" ? data.area : undefined,
+        affordability: (data.affordability as Affordability | undefined) ?? undefined,
+        focus: (data.focus as FocusParcel | undefined) ?? undefined,
+        exportPdf: (data.exportPdf as ExportPdfRequest | undefined) ?? undefined,
       };
     case "error":
       return { type: "error", message: String(data.message ?? "the assistant hit an error") };
@@ -85,13 +94,16 @@ export async function streamAgent(
   message: string,
   handlers: AgentHandlers,
   signal?: AbortSignal,
+  areaGeometry?: GeoJsonGeometry | null,
 ): Promise<void> {
   let response: Response;
   try {
     response = await fetch(agentUrl(), {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
-      body: JSON.stringify({ message }),
+      // Forward the user's drawn area (if any) so the agent operates on the SELECTED area; the
+      // backend resolves it to an opaque token (the model never sees coordinates).
+      body: JSON.stringify(areaGeometry ? { message, area_geometry: areaGeometry } : { message }),
       signal,
     });
   } catch {
@@ -137,6 +149,10 @@ export async function streamAgent(
             break;
           case "result":
             if (ev.featureCollection) handlers.onResult?.(ev.featureCollection, ev.area);
+            if (ev.affordability) handlers.onAffordability?.(ev.affordability);
+            // focus AFTER result so a "zoom to parcel" flyTo wins over the result's fit-to-area.
+            if (ev.focus) handlers.onFocus?.(ev.focus);
+            if (ev.exportPdf) handlers.onExportPdf?.(ev.exportPdf);
             break;
           case "error":
             handlers.onError?.(ev.message);

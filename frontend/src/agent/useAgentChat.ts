@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { ScoreFeatureCollection } from "../api/client";
+import { generateParcelsReport } from "../export/parcelReport";
 import { useMapStore } from "../map/useMapStore";
 import { streamAgent } from "./agentClient";
 import type { ChatMessage, ParcelRef } from "./types";
@@ -84,6 +85,9 @@ export function useAgentChat() {
       const asstId = newId();
       append({ id: asstId, role: "assistant", text: "", streaming: true });
 
+      // Forward the currently drawn area so the agent can score / check affordability on the
+      // user's actual selection (not just a place name re-parsed from the text).
+      const areaGeometry = store.drawnPolygon;
       await streamAgent(
         text,
         {
@@ -99,6 +103,41 @@ export function useAgentChat() {
           onResult: (fc) => {
             if (mountedRef.current) applyResult(asstId, fc);
           },
+          onAffordability: (affordability) => {
+            if (mountedRef.current) patch(asstId, { affordability });
+          },
+          onFocus: (focus) => {
+            if (!mountedRef.current) return;
+            // Select + zoom to the parcel the agent named (parcel-level zoom).
+            store.setSelected({ id: focus.parcel_id, apn: focus.apn, acres: null });
+            store.flyTo(focus.centroid, 15);
+          },
+          onExportPdf: (req) => {
+            if (!mountedRef.current) return;
+            void generateParcelsReport({
+              ids: req.parcel_ids,
+              result: store.scoreResult,
+              useCase: store.useCase,
+              snapshot: store.captureMapSnapshot(),
+            })
+              .then((r) => {
+                if (!mountedRef.current) return;
+                if (r.count === 0) {
+                  patch(asstId, (m) => ({
+                    text: `${m.text}\n\n_(No scored parcels to export yet — score an area first.)_`,
+                  }));
+                } else if (r.capped) {
+                  patch(asstId, (m) => ({
+                    text: `${m.text}\n\n_(Exported the top ${r.count} of ${r.requested} parcels to PDF.)_`,
+                  }));
+                }
+              })
+              .catch(() => {
+                if (mountedRef.current) {
+                  patch(asstId, (m) => ({ text: `${m.text}\n\n_(Couldn't generate the PDF.)_` }));
+                }
+              });
+          },
           onError: (message) => {
             if (mountedRef.current) {
               patch(asstId, (m) => ({
@@ -109,6 +148,7 @@ export function useAgentChat() {
           },
         },
         controller.signal,
+        areaGeometry,
       );
 
       if (mountedRef.current) {
@@ -121,7 +161,7 @@ export function useAgentChat() {
       setBusy(false);
       abortRef.current = null;
     },
-    [busy, append, patch, applyResult],
+    [busy, append, patch, applyResult, store],
   );
 
   useEffect(() => {

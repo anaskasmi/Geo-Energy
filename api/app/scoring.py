@@ -115,6 +115,43 @@ _ZONE_CODE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ./-]{0,31}$")
 
 NEUTRAL_NORM = 0.5  # imputed normalised value for a NULL/unknown factor
 
+# --- Affordability blend (GEO-41) --------------------------------------------
+# Affordability is NOT a Stage-B SQL Factor: its value comes from a LIVE, request-time, AREA-LEVEL
+# lookup (app.landvalue), so it can't be a parcels column. Because the area signal is uniform
+# across the drawn area, folding it in is an ORDER-PRESERVING affine blend of the 0..100 suitability
+# score — so we apply it post-query in app.agent_tools.score_parcels with no change to the SQL or
+# the candidate ranking. Cheaper area -> higher affordability score -> higher blended suitability.
+AFFORDABILITY_WEIGHT_DEFAULT = 0.12
+# Median owner-occupied home value ($) domain for Kern County, CA (ACS B25077). Lower = more
+# affordable. Grounded in Kern reality (county median ~$310k; cheap rural tracts ~$150k, pricier
+# town/foothill tracts approach $600k). Clamped, oriented so cheaper -> 1.0.
+AFFORDABILITY_MEDIAN_DOMAIN = (150_000.0, 600_000.0)
+
+
+def affordability_score_from_median(median_usd: float | None) -> float | None:
+    """Normalise a median home value ($) to 0..1 (higher = more affordable). ``None`` if unknown.
+
+    Mirrors :func:`factor_norm`'s clamp-then-orient for a "lower is better" factor.
+    """
+    if median_usd is None or not math.isfinite(median_usd):
+        return None
+    lo, hi = AFFORDABILITY_MEDIAN_DOMAIN
+    ratio = (median_usd - lo) / (hi - lo)
+    clamped = min(max(ratio, 0.0), 1.0)
+    return 1.0 - clamped  # lower value -> more affordable -> higher score
+
+
+def blend_affordability(score_0_100: float, affordability_0_1: float, weight: float) -> float:
+    """Convex blend of a 0..100 suitability score with a 0..1 affordability score.
+
+    ``(1 - w) * score + w * 100 * affordability``. ``weight`` is clamped to [0, 1]; an out-of-range
+    ``affordability`` is clamped to [0, 1]. Order-preserving for a fixed (affordability, weight), so
+    applying it after ranking/LIMIT yields the same set as applying it before.
+    """
+    w = min(max(float(weight), 0.0), 1.0)
+    aff = min(max(float(affordability_0_1), 0.0), 1.0)
+    return (1.0 - w) * float(score_0_100) + w * 100.0 * aff
+
 
 class ScoringError(ValueError):
     """Invalid scoring parameters (bad use case, weights, thresholds, or zone codes)."""
