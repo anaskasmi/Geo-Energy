@@ -26,7 +26,7 @@ import re
 import threading
 from collections import OrderedDict
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal, get_args
 
 import duckdb
 
@@ -565,6 +565,119 @@ def focus_parcel(cur, *, parcel_id: int) -> dict:
     }
 
 
+# --- set_map_view: client-relayed map layer/basemap control ------------------------------------
+# Like focus_parcel/export_pdf, this tool does NO engine work — it validates the request and returns
+# a payload the SSE handler forwards to the browser, which mutates the real map store (the agent
+# never touches the map itself). It lets the assistant (text AND voice) toggle data layers and
+# switch the basemap ("map mode") in response to plain requests like "hide the flood layer" or
+# "switch to satellite".
+
+# Canonical logical layer ids — mirrors the frontend LAYERS registry (frontend/src/map/layers.ts).
+MAP_LAYER_IDS: tuple[str, ...] = ("parcels", "transmission", "substations", "sfha", "result")
+
+# Friendly names the model (echoing the user) might use -> canonical layer id.
+_LAYER_ALIASES: dict[str, str] = {
+    "parcels": "parcels", "parcel": "parcels", "lots": "parcels", "lot": "parcels",
+    "transmission": "transmission", "transmission line": "transmission",
+    "transmission lines": "transmission", "power line": "transmission",
+    "power lines": "transmission", "powerline": "transmission", "powerlines": "transmission",
+    "lines": "transmission", "grid": "transmission", "grid lines": "transmission",
+    "substation": "substations", "substations": "substations", "subs": "substations",
+    "sub": "substations",
+    "sfha": "sfha", "flood": "sfha", "floods": "sfha", "flooding": "sfha", "flood zone": "sfha",
+    "flood zones": "sfha", "floodplain": "sfha", "flood plain": "sfha", "flood hazard": "sfha",
+    "flood (sfha)": "sfha", "fema": "sfha",
+    "result": "result", "results": "result", "score": "result", "scores": "result",
+    "scoring": "result", "suitability": "result", "suitability score": "result",
+    "suitability scores": "result", "scored parcels": "result", "heatmap": "result",
+    "ranking": "result", "rankings": "result",
+}
+_ALL_LAYER_WORDS = {"all", "everything", "every layer", "all layers", "every"}
+_NO_LAYER_WORDS = {"none", "nothing", "no layers", "no layer"}
+
+
+def _normalize_layers(text: str) -> list[str]:
+    """Parse a comma/semicolon list of friendly layer names into canonical, de-duped layer ids.
+
+    Accepts 'all'/'everything' (=> every layer) and 'none' (=> empty). Raises :class:`ToolError`
+    naming the valid layers if a token can't be resolved, so the agent can correct itself.
+    """
+    if not text or not text.strip():
+        return []
+    out: list[str] = []
+    for raw in re.split(r"[,;/]+", text):
+        tok = re.sub(r"\s+", " ", raw.strip().lower()).strip(" .")
+        if not tok:
+            continue
+        if tok in _ALL_LAYER_WORDS:
+            for lid in MAP_LAYER_IDS:
+                if lid not in out:
+                    out.append(lid)
+            continue
+        if tok in _NO_LAYER_WORDS:
+            continue
+        lid = _LAYER_ALIASES.get(tok)
+        if lid is None:
+            raise ToolError(
+                f"unknown map layer {raw.strip()!r}; valid layers are parcels, transmission, "
+                "substations, flood, and suitability score (or 'all')"
+            )
+        if lid not in out:
+            out.append(lid)
+    return out
+
+
+# The basemap / "map mode" values the UI supports (mirrors the frontend BasemapId) plus a 'keep'
+# sentinel meaning "leave the basemap unchanged" — so set_map_view can toggle layers WITHOUT
+# touching the basemap. Kept as a Literal so the agent.py wrapper advertises the same enum the
+# parity test pins to MAP_BASEMAP_ENUM.
+BasemapMode = Literal["keep", "auto", "light", "dark", "streets", "satellite"]
+MAP_BASEMAP_ENUM: list[str] = list(get_args(BasemapMode))
+
+# Common synonyms the model (echoing the user) might say -> canonical basemap id. The live agent
+# schema constrains basemap to MAP_BASEMAP_ENUM, so this is mostly defensive (and exercised by the
+# direct unit tests).
+_BASEMAP_ALIASES: dict[str, str] = {
+    "satellite": "satellite", "imagery": "satellite", "aerial": "satellite", "sat": "satellite",
+    "satellite imagery": "satellite", "satellite view": "satellite",
+    "streets": "streets", "street": "streets", "street map": "streets", "road": "streets",
+    "roads": "streets", "roadmap": "streets",
+    "light": "light", "day": "light", "daytime": "light",
+    "dark": "dark", "night": "dark", "nighttime": "dark",
+    "auto": "auto", "automatic": "auto", "theme": "auto", "default": "auto",
+    "keep": "keep", "": "keep", "unchanged": "keep", "same": "keep", "none": "keep",
+}
+
+
+def set_map_view(*, show: str = "", hide: str = "", basemap: str = "keep") -> dict:
+    """Show/hide map layers and/or switch the basemap — a client-relayed UI action (no engine call).
+
+    ``show``/``hide`` are comma-separated friendly layer names (see :func:`_normalize_layers`);
+    ``basemap`` is one of :data:`MAP_BASEMAP_ENUM` ('keep' = leave unchanged). Returns a
+    ``{"type": "MapView", show, hide, basemap}`` payload the SSE handler forwards to the browser,
+    which mutates the real map store (the agent/engine never touches the map itself). Raises
+    :class:`ToolError` for an unknown layer/basemap, a show/hide conflict, or a no-op call.
+    """
+    show_ids = _normalize_layers(show)
+    hide_ids = _normalize_layers(hide)
+    clash = [lid for lid in show_ids if lid in set(hide_ids)]
+    if clash:
+        raise ToolError(f"cannot show and hide the same layer: {', '.join(clash)}")
+
+    key = re.sub(r"\s+", " ", (basemap or "").strip().lower()).strip(" .")
+    chosen = _BASEMAP_ALIASES.get(key, key)
+    if chosen not in MAP_BASEMAP_ENUM:
+        choices = ", ".join(m for m in MAP_BASEMAP_ENUM if m != "keep")
+        raise ToolError(f"unknown basemap {basemap!r}; choose one of {choices}")
+    basemap_out = None if chosen == "keep" else chosen
+
+    if not show_ids and not hide_ids and basemap_out is None:
+        raise ToolError(
+            "nothing to change — name one or more layers to show/hide, or a basemap to switch to"
+        )
+    return {"type": "MapView", "show": show_ids, "hide": hide_ids, "basemap": basemap_out}
+
+
 def export_pdf(*, parcel_ids: str = "") -> dict:
     """Request a client-side PDF report for one or more parcels (the BROWSER renders it).
 
@@ -773,6 +886,48 @@ REGISTRY: list[ToolDef] = [
         surfaces=("text", "voice"),
         phase="exporting_pdf",
         result=ResultSpec("exportPdf", "ExportPdf", None, True),
+        parity="props",
+    ),
+    ToolDef(
+        name="set_map_view",
+        description=(
+            "Change what is shown on the map: toggle data layers on/off and/or switch the basemap "
+            "(map mode). 'show' and 'hide' each take a comma-separated list of layer names — "
+            "parcels, transmission, substations, flood, suitability score — or 'all'/'none'. "
+            "'basemap' switches the base map style (auto, light, dark, streets, satellite); omit it "
+            "to leave the basemap unchanged. Use this when the user asks to show/hide a layer "
+            "(e.g. 'hide flood zones', 'turn on transmission lines') or change the map view "
+            "(e.g. 'switch to satellite', 'dark map')."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "show": {
+                    "type": "string",
+                    "description": (
+                        "Comma-separated layer names to TURN ON (parcels, transmission, "
+                        "substations, flood, suitability score), or 'all'."
+                    ),
+                },
+                "hide": {
+                    "type": "string",
+                    "description": "Comma-separated layer names to TURN OFF, or 'all'.",
+                },
+                "basemap": {
+                    "type": "string",
+                    "enum": MAP_BASEMAP_ENUM,
+                    "description": (
+                        "Basemap / map mode to switch to: auto, light, dark, streets, or satellite. "
+                        "Omit (or 'keep') to leave the current basemap unchanged."
+                    ),
+                },
+            },
+            "required": [],  # all optional: show/hide default to "", basemap defaults to "keep"
+            "additionalProperties": False,
+        },
+        surfaces=("text", "voice"),
+        phase="updating_map",
+        result=ResultSpec("mapView", "MapView", None, True),
         parity="props",
     ),
 ]

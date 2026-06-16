@@ -2,7 +2,11 @@ import { apiClient } from "../api/client";
 import type { ScoreFeatureCollection, UseCase } from "../api/client";
 import { generateParcelsReport } from "../export/parcelReport";
 import type { ParcelInfo, ScoreStatus } from "../map/MapContext";
+import { LAYERS, resolveLayerNames } from "../map/layers";
+import type { LayerStateMap } from "../map/layers";
 import { PLACE_LABELS, resolvePlace } from "../map/places";
+import { resolveBasemapMode } from "../theme/basemap";
+import type { BasemapId } from "../theme/basemap";
 
 /**
  * Voice-tool EXECUTORS (GEO-42), split out of AgentPanel so the voice surface is an enforced mirror
@@ -21,7 +25,8 @@ export type VoiceToolName =
   | "explain_parcel"
   | "grid_context"
   | "focus_parcel"
-  | "export_pdf";
+  | "export_pdf"
+  | "set_map_view";
 
 export type VoiceExecutor = (args: Record<string, unknown>) => Promise<unknown>;
 
@@ -32,14 +37,28 @@ export interface VoiceCtx {
   setScoreResult: (result: ScoreFeatureCollection | null) => void;
   setScoreStatus: (status: ScoreStatus, error?: string | null) => void;
   setUseCase: (useCase: UseCase) => void;
+  setLayerVisible: (id: string, visible: boolean) => void;
+  setBasemap: (basemap: BasemapId) => void;
+  layers: LayerStateMap;
   scoreResult: ScoreFeatureCollection | null;
   useCase: UseCase;
   captureMapSnapshot: () => string | null;
 }
 
 export function makeVoiceExecutors(ctx: VoiceCtx): Record<VoiceToolName, VoiceExecutor> {
-  const { flyTo, setSelected, setScoreResult, setScoreStatus, setUseCase, scoreResult, useCase, captureMapSnapshot } =
-    ctx;
+  const {
+    flyTo,
+    setSelected,
+    setScoreResult,
+    setScoreStatus,
+    setUseCase,
+    setLayerVisible,
+    setBasemap,
+    layers,
+    scoreResult,
+    useCase,
+    captureMapSnapshot,
+  } = ctx;
 
   return {
     find_sites: async (args) => {
@@ -162,6 +181,44 @@ export function makeVoiceExecutors(ctx: VoiceCtx): Record<VoiceToolName, VoiceEx
       } catch {
         return { error: "Couldn't generate the PDF." };
       }
+    },
+
+    set_map_view: async (args) => {
+      // Mirror of the text agent's set_map_view: toggle data layers and/or switch the basemap,
+      // then hand back a compact summary so the model can speak what changed. Runs entirely on the
+      // map store (no engine call) — the same path the Layers/Basemap controls use.
+      const show = resolveLayerNames(String(args.show ?? ""));
+      const hide = resolveLayerNames(String(args.hide ?? ""));
+      const unknownLayers = [...show.unknown, ...hide.unknown];
+      if (unknownLayers.length) {
+        return {
+          error: `I don't have a layer called ${unknownLayers.join(", ")}. Try parcels, transmission, substations, flood, or suitability score.`,
+        };
+      }
+      const clash = show.ids.filter((id) => hide.ids.includes(id));
+      if (clash.length) return { error: `I can't show and hide the same layer at once: ${clash.join(", ")}.` };
+      const bm = resolveBasemapMode(String(args.basemap ?? "keep"));
+      if (bm.unknown) {
+        return { error: `I don't know a map mode called "${String(args.basemap)}". Try satellite, streets, light, dark, or auto.` };
+      }
+      if (!show.ids.length && !hide.ids.length && bm.id === null) {
+        return { error: "Tell me which layer to show or hide, or which map mode to switch to." };
+      }
+      hide.ids.forEach((id) => setLayerVisible(id, false));
+      show.ids.forEach((id) => setLayerVisible(id, true));
+      if (bm.id) setBasemap(bm.id);
+      // Resulting visible set, computed from current state + this change (setState is async, so we
+      // can't read `layers` back immediately).
+      const visible = new Set(Object.entries(layers).filter(([, t]) => t.visible).map(([id]) => id));
+      hide.ids.forEach((id) => visible.delete(id));
+      show.ids.forEach((id) => visible.add(id));
+      return {
+        ok: true,
+        shown: show.ids,
+        hidden: hide.ids,
+        basemap: bm.id ?? undefined,
+        layers_visible: LAYERS.filter((d) => visible.has(d.id)).map((d) => d.id),
+      };
     },
   };
 }

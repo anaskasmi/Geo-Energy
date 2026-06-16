@@ -71,5 +71,22 @@
       },
       "required": []
     }
+  },
+  {
+    "name": "set_map_view",
+    "description": "Change what is shown on the map: toggle data layers on/off and/or switch the basemap (map mode). 'show'/'hide' take comma-separated layer names (parcels, transmission, substations, flood, suitability score) or 'all'/'none'. 'basemap' switches the map mode. Use it for requests like 'hide the flood layer', 'turn on transmission lines', or 'switch to satellite'.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "show": { "type": "string", "description": "Comma-separated layer names to TURN ON (parcels, transmission, substations, flood, suitability score), or 'all'." },
+        "hide": { "type": "string", "description": "Comma-separated layer names to TURN OFF, or 'all'." },
+        "basemap": {
+          "type": "string",
+          "enum": ["keep", "auto", "light", "dark", "streets", "satellite"],
+          "description": "Basemap / map mode to switch to: auto, light, dark, streets, or satellite. Omit (or 'keep') to leave the current basemap unchanged."
+        }
+      },
+      "required": []
+    }
   }
 ]

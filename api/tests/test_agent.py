@@ -167,6 +167,44 @@ def test_agent_deterministic_function_model(client):
     assert types[-1] == "done"
 
 
+# --- 2a) set_map_view relay: layer toggles + basemap reach the `result` event -----------------
+def test_agent_set_map_view_relayed(client):
+    """A set_map_view tool call is captured and emitted as a `result.mapView` relay payload.
+
+    Mirrors the focus_parcel/export_pdf relay path: the engine does nothing; the browser ACTS on
+    the payload. Asserts the documented `updating_map` step phase and the normalized canonical ids.
+    """
+    calls = {"n": 0}
+
+    async def stream_fn(messages: list, info: AgentInfo):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            yield {0: DeltaToolCall(
+                name="set_map_view",
+                json_args=json.dumps({"show": "transmission", "hide": "flood", "basemap": "satellite"}),
+            )}
+        else:
+            for chunk in ("Switched ", "the map."):
+                yield chunk
+
+    with agent_mod.get_agent().override(model=FunctionModel(stream_function=stream_fn)):
+        resp = client.post("/api/agent", json={"message": "show transmission, hide flood, satellite"})
+    assert resp.status_code == 200, resp.text
+
+    events = parse_sse(resp.text)
+    step = next(e for e in events if e["event"] == "step" and e["data"]["tool"] == "set_map_view")
+    assert step["data"]["phase"] == "updating_map"
+
+    result = next(e for e in events if e["event"] == "result")["data"]
+    assert result["mapView"] == {
+        "type": "MapView",
+        "show": ["transmission"],
+        "hide": ["sfha"],
+        "basemap": "satellite",
+    }
+    assert [e["event"] for e in events][-1] == "done"
+
+
 # --- 2b) Affordability flow: resolve -> check_affordability -> score_parcels(affordability) ---
 def test_agent_affordability_flow(client):
     """Force the affordability turn and assert the SSE protocol + blended result.

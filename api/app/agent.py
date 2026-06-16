@@ -54,6 +54,7 @@ from pydantic_ai.messages import (
 )
 
 from app import agent_tools as at
+from app.agent_tools import BasemapMode
 from app.models import UseCase
 
 log = logging.getLogger("api.agent")
@@ -189,6 +190,9 @@ _INSTRUCTIONS = (
     "To zoom the map to a specific parcel, call focus_parcel with its id. To produce a downloadable "
     "PDF report of one or more parcels, call export_pdf with a comma-separated list of parcel ids "
     "(or empty for all parcels currently shown). "
+    "To change what is shown on the map, call set_map_view: pass 'show'/'hide' with layer names "
+    "(parcels, transmission, substations, flood, suitability score) to toggle layers, and/or "
+    "'basemap' (auto, light, dark, streets, satellite) to switch the map mode. "
     "DATA PROVENANCE — if the user asks where the data comes from: parcels and zoning come from "
     "Kern County GEODAT (the county assessor's open data); terrain slope from USGS 3DEP; the solar "
     "resource (GHI) from NREL; transmission lines and substations from HIFLD; flood (SFHA) zones "
@@ -329,6 +333,24 @@ def _register_tools(agent: Agent) -> None:
         """
         try:
             return at.export_pdf(parcel_ids=parcel_ids)
+        except at.ToolError as exc:
+            return {"error": str(exc)}
+
+    @agent.tool
+    def set_map_view(
+        ctx: RunContext[Deps],
+        show: str = "",
+        hide: str = "",
+        basemap: BasemapMode = "keep",
+    ) -> dict:
+        """Show/hide map layers and/or switch the basemap (map mode); the UI applies it.
+
+        'show'/'hide' are comma-separated layer names (parcels, transmission, substations, flood,
+        suitability score — or 'all'). 'basemap' is auto/light/dark/streets/satellite, or 'keep' to
+        leave it unchanged. No engine call — the browser mutates the real map.
+        """
+        try:
+            return at.set_map_view(show=show, hide=hide, basemap=basemap)
         except at.ToolError as exc:
             return {"error": str(exc)}
 

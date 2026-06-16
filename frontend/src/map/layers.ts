@@ -184,6 +184,55 @@ export function scoreTextColor(score: number | null | undefined): string {
   return contrastBlack >= contrastWhite ? "#1a1a1a" : "#ffffff";
 }
 
+/**
+ * Friendly layer names the assistant (echoing the user) might use -> canonical layer id. Mirrors
+ * the Python `_LAYER_ALIASES` (api/app/agent_tools.py) so the voice `set_map_view` tool resolves
+ * the same vocabulary the text agent does. Used only by the voice executor (the text agent resolves
+ * names server-side and relays canonical ids).
+ */
+const LAYER_ALIASES: Record<string, string> = {
+  parcels: "parcels", parcel: "parcels", lots: "parcels", lot: "parcels",
+  transmission: "transmission", "transmission line": "transmission",
+  "transmission lines": "transmission", "power line": "transmission",
+  "power lines": "transmission", powerline: "transmission", powerlines: "transmission",
+  lines: "transmission", grid: "transmission", "grid lines": "transmission",
+  substation: "substations", substations: "substations", subs: "substations", sub: "substations",
+  sfha: "sfha", flood: "sfha", floods: "sfha", flooding: "sfha", "flood zone": "sfha",
+  "flood zones": "sfha", floodplain: "sfha", "flood plain": "sfha", "flood hazard": "sfha",
+  "flood (sfha)": "sfha", fema: "sfha",
+  result: "result", results: "result", score: "result", scores: "result", scoring: "result",
+  suitability: "result", "suitability score": "result", "suitability scores": "result",
+  "scored parcels": "result", heatmap: "result", ranking: "result", rankings: "result",
+};
+const ALL_LAYER_WORDS = new Set(["all", "everything", "every layer", "all layers", "every"]);
+const NO_LAYER_WORDS = new Set(["none", "nothing", "no layers", "no layer"]);
+
+/**
+ * Resolve a comma/semicolon list of friendly layer names to canonical ids (de-duped, in input
+ * order), plus any tokens that didn't resolve. 'all'/'everything' expands to every layer; 'none'
+ * resolves to nothing.
+ */
+export function resolveLayerNames(text: string): { ids: string[]; unknown: string[] } {
+  const ids: string[] = [];
+  const unknown: string[] = [];
+  for (const raw of String(text ?? "").split(/[,;/]+/)) {
+    const tok = raw.trim().toLowerCase().replace(/\s+/g, " ").replace(/^[.\s]+|[.\s]+$/g, "");
+    if (!tok) continue;
+    if (ALL_LAYER_WORDS.has(tok)) {
+      for (const def of LAYERS) if (!ids.includes(def.id)) ids.push(def.id);
+      continue;
+    }
+    if (NO_LAYER_WORDS.has(tok)) continue;
+    const id = LAYER_ALIASES[tok];
+    if (!id) {
+      unknown.push(raw.trim());
+      continue;
+    }
+    if (!ids.includes(id)) ids.push(id);
+  }
+  return { ids, unknown };
+}
+
 export interface LayerToggleState {
   visible: boolean;
   opacity: number;

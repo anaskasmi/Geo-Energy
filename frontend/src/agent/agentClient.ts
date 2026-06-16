@@ -1,6 +1,12 @@
 import type { GeoJsonGeometry, ScoreFeatureCollection } from "../api/client";
 import { API_BASE_URL } from "../config/env";
-import type { Affordability, AgentStreamEvent, ExportPdfRequest, FocusParcel } from "./types";
+import type {
+  Affordability,
+  AgentStreamEvent,
+  ExportPdfRequest,
+  FocusParcel,
+  MapViewRequest,
+} from "./types";
 
 /**
  * Live agent SSE client (GEO-21) — talks to the real `POST /api/agent` (Gemini via Pydantic AI,
@@ -27,6 +33,7 @@ export const PHASE_LABELS: Record<string, string> = {
   checking_affordability: "Checking land affordability…",
   focusing_parcel: "Zooming to parcel…",
   exporting_pdf: "Preparing PDF…",
+  updating_map: "Updating the map…",
 };
 
 export interface AgentHandlers {
@@ -36,6 +43,7 @@ export interface AgentHandlers {
   onAffordability?: (affordability: Affordability) => void;
   onFocus?: (focus: FocusParcel) => void;
   onExportPdf?: (request: ExportPdfRequest) => void;
+  onMapView?: (request: MapViewRequest) => void;
   onError?: (message: string) => void;
   onDone?: () => void;
 }
@@ -75,6 +83,7 @@ function parseFrame(frame: string): AgentStreamEvent | null {
         affordability: (data.affordability as Affordability | undefined) ?? undefined,
         focus: (data.focus as FocusParcel | undefined) ?? undefined,
         exportPdf: (data.exportPdf as ExportPdfRequest | undefined) ?? undefined,
+        mapView: (data.mapView as MapViewRequest | undefined) ?? undefined,
       };
     case "error":
       return { type: "error", message: String(data.message ?? "the assistant hit an error") };
@@ -153,6 +162,7 @@ export async function streamAgent(
             // focus AFTER result so a "zoom to parcel" flyTo wins over the result's fit-to-area.
             if (ev.focus) handlers.onFocus?.(ev.focus);
             if (ev.exportPdf) handlers.onExportPdf?.(ev.exportPdf);
+            if (ev.mapView) handlers.onMapView?.(ev.mapView);
             break;
           case "error":
             handlers.onError?.(ev.message);

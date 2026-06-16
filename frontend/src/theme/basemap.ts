@@ -26,6 +26,34 @@ const BACKGROUND_LAYER_ID = "background";
 /** What the basemap control offers. "auto" tracks the app theme. */
 export type BasemapId = "auto" | "light" | "dark" | "streets" | "satellite";
 
+/**
+ * Synonyms the assistant (echoing the user) might say -> canonical basemap id, plus a "keep"
+ * sentinel meaning "leave the basemap unchanged". Mirrors the Python `_BASEMAP_ALIASES`
+ * (api/app/agent_tools.py) so the voice `set_map_view` tool resolves the same vocabulary.
+ */
+const BASEMAP_ALIASES: Record<string, BasemapId | "keep"> = {
+  satellite: "satellite", imagery: "satellite", aerial: "satellite", sat: "satellite",
+  "satellite imagery": "satellite", "satellite view": "satellite",
+  streets: "streets", street: "streets", "street map": "streets", road: "streets",
+  roads: "streets", roadmap: "streets",
+  light: "light", day: "light", daytime: "light",
+  dark: "dark", night: "dark", nighttime: "dark",
+  auto: "auto", automatic: "auto", theme: "auto", default: "auto",
+  keep: "keep", "": "keep", unchanged: "keep", same: "keep", none: "keep",
+};
+
+/**
+ * Resolve a basemap / "map mode" token. `keep: true` => leave the basemap unchanged; a non-null
+ * `id` => switch to it; `unknown: true` => the token matched no mode.
+ */
+export function resolveBasemapMode(token: string): { id: BasemapId | null; keep: boolean; unknown: boolean } {
+  const key = String(token ?? "").trim().toLowerCase().replace(/\s+/g, " ").replace(/^[.\s]+|[.\s]+$/g, "");
+  const resolved = BASEMAP_ALIASES[key];
+  if (resolved === undefined) return { id: null, keep: false, unknown: true };
+  if (resolved === "keep") return { id: null, keep: true, unknown: false };
+  return { id: resolved, keep: false, unknown: false };
+}
+
 /** A basemap with an explicit raster source (auto resolves to light/dark first). */
 type ConcreteBasemap = "light" | "dark" | "streets" | "satellite";
 

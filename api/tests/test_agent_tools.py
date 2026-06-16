@@ -272,6 +272,64 @@ def test_export_pdf_bad_id_raises():
         at.export_pdf(parcel_ids="5,abc")
 
 
+# --- set_map_view (GEO: client-relayed layer/basemap control) ---------------------------------
+def test_set_map_view_toggles_layers_and_basemap():
+    out = at.set_map_view(show="transmission, substations", hide="flood", basemap="satellite")
+    assert out == {
+        "type": "MapView",
+        "show": ["transmission", "substations"],
+        "hide": ["sfha"],
+        "basemap": "satellite",
+    }
+
+
+def test_set_map_view_friendly_aliases_resolve():
+    out = at.set_map_view(show="power lines, suitability score", hide="parcels")
+    assert out["show"] == ["transmission", "result"]
+    assert out["hide"] == ["parcels"]
+    assert out["basemap"] is None  # 'keep' default leaves the basemap unchanged
+
+
+def test_set_map_view_all_expands_to_every_layer():
+    out = at.set_map_view(show="all")
+    assert out["show"] == list(at.MAP_LAYER_IDS)
+
+
+def test_set_map_view_dedupes_and_preserves_order():
+    out = at.set_map_view(show="flood, sfha, flood zones")
+    assert out["show"] == ["sfha"]
+
+
+def test_set_map_view_keep_basemap_is_none():
+    out = at.set_map_view(hide="result", basemap="keep")
+    assert out["basemap"] is None
+
+
+def test_set_map_view_unknown_layer_raises():
+    with pytest.raises(at.ToolError):
+        at.set_map_view(show="rivers")
+
+
+def test_set_map_view_unknown_basemap_raises():
+    with pytest.raises(at.ToolError):
+        at.set_map_view(basemap="hologram")
+
+
+def test_set_map_view_show_hide_conflict_raises():
+    with pytest.raises(at.ToolError):
+        at.set_map_view(show="flood", hide="flood")
+
+
+def test_set_map_view_noop_raises():
+    with pytest.raises(at.ToolError):
+        at.set_map_view()
+
+
+def test_set_map_view_basemap_enum_excludes_real_modes_only_keep():
+    # 'keep' is the only non-basemap sentinel; the rest mirror the frontend BasemapId.
+    assert at.MAP_BASEMAP_ENUM == ["keep", "auto", "light", "dark", "streets", "satellite"]
+
+
 # --- explain_parcel ---------------------------------------------------------------------------
 def test_explain_parcel_excluded(con, zoning_rules):
     out = at.explain_parcel(con, parcel_id=3, use_case="utility_solar", zoning_rules=zoning_rules)
@@ -306,7 +364,7 @@ def test_tool_specs_present_and_named():
     names = {t["name"] for t in at.TOOL_SPECS}
     assert names == {
         "resolve_area", "score_parcels", "check_affordability", "explain_parcel", "grid_context",
-        "focus_parcel", "export_pdf",
+        "focus_parcel", "export_pdf", "set_map_view",
     }
 
 

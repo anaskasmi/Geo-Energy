@@ -112,6 +112,14 @@ export function useAgentChat() {
             store.setSelected({ id: focus.parcel_id, apn: focus.apn, acres: null });
             store.flyTo(focus.centroid, 15);
           },
+          onMapView: (req) => {
+            if (!mountedRef.current) return;
+            // Apply the agent's layer toggles + basemap switch to the real map store (same setters
+            // the Layers/Basemap controls use). Hide before show so an "all" show wins any overlap.
+            req.hide.forEach((id) => store.setLayerVisible(id, false));
+            req.show.forEach((id) => store.setLayerVisible(id, true));
+            if (req.basemap) store.setBasemap(req.basemap);
+          },
           onExportPdf: (req) => {
             if (!mountedRef.current) return;
             void generateParcelsReport({

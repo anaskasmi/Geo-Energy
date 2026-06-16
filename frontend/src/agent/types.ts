@@ -1,4 +1,5 @@
 import type { ScoreFeatureCollection } from "../api/client";
+import type { BasemapId } from "../theme/basemap";
 
 export type ChatRole = "user" | "assistant";
 
@@ -55,6 +56,16 @@ export interface ExportPdfRequest {
   parcel_ids: number[];
 }
 
+/** The agent asked the UI to toggle layers and/or switch the basemap (set_map_view tool). */
+export interface MapViewRequest {
+  /** Canonical layer ids to turn ON. */
+  show: string[];
+  /** Canonical layer ids to turn OFF. */
+  hide: string[];
+  /** Basemap to switch to, or null to leave the current basemap unchanged. */
+  basemap: BasemapId | null;
+}
+
 export type AgentStreamEvent =
   | { type: "step"; phase: string; tool: string }
   | { type: "token"; text: string }
@@ -65,6 +76,7 @@ export type AgentStreamEvent =
       affordability?: Affordability;
       focus?: FocusParcel;
       exportPdf?: ExportPdfRequest;
+      mapView?: MapViewRequest;
     }
   | { type: "error"; message: string }
   | { type: "done" };

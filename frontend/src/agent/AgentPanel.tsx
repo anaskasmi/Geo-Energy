@@ -31,7 +31,7 @@ Voice rules:
 - Reference the screen naturally, e.g. "I've put the top sites on the map."
 - No markdown, bullet points, or special characters — your words are spoken aloud.
 
-When the user asks to find, score, or rank sites, call find_sites with the place and use_case. When they only want to look at an area, call focus_map. For land affordability or cost, call check_affordability. To explain why a specific parcel scored as it did, call explain_parcel with its id (from a prior find_sites result). For grid or interconnection-queue background, call grid_context. To zoom to a specific parcel, call focus_parcel with its id. To create a downloadable PDF of one or more parcels, call export_pdf (comma-separated ids, or empty for all parcels currently shown).
+When the user asks to find, score, or rank sites, call find_sites with the place and use_case. When they only want to look at an area, call focus_map. For land affordability or cost, call check_affordability. To explain why a specific parcel scored as it did, call explain_parcel with its id (from a prior find_sites result). For grid or interconnection-queue background, call grid_context. To zoom to a specific parcel, call focus_parcel with its id. To create a downloadable PDF of one or more parcels, call export_pdf (comma-separated ids, or empty for all parcels currently shown). To show or hide map layers (parcels, transmission, substations, flood, suitability score) or switch the basemap (satellite, streets, light, dark, auto), call set_map_view.
 If asked where the data comes from: parcels and zoning are from Kern County GEODAT, terrain slope from USGS 3DEP, solar resource from NREL, transmission and substations from HIFLD, flood zones from FEMA, the interconnection queue from CAISO, and land affordability from the FHFA price index via FRED plus US Census home values.
 Places you cover: ${PLACE_LABELS.join(", ")}. If they name somewhere else, say you only cover Kern County for now.`;
 
@@ -44,8 +44,19 @@ Places you cover: ${PLACE_LABELS.join(", ")}. If they name somewhere else, say y
  */
 export function AgentPanel({ onClose }: { onClose?: () => void }) {
   const { messages, send, busy } = useAgentChat();
-  const { setSelected, flyTo, setScoreResult, setScoreStatus, setUseCase, scoreResult, useCase, captureMapSnapshot } =
-    useMapStore();
+  const {
+    setSelected,
+    flyTo,
+    setScoreResult,
+    setScoreStatus,
+    setUseCase,
+    setLayerVisible,
+    setBasemap,
+    layers,
+    scoreResult,
+    useCase,
+    captureMapSnapshot,
+  } = useMapStore();
   const [input, setInput] = useState("");
   const logRef = useRef<HTMLDivElement | null>(null);
   const taRef = useRef<HTMLTextAreaElement | null>(null);
@@ -62,6 +73,9 @@ export function AgentPanel({ onClose }: { onClose?: () => void }) {
       setScoreResult,
       setScoreStatus,
       setUseCase,
+      setLayerVisible,
+      setBasemap,
+      layers,
       scoreResult,
       useCase,
       captureMapSnapshot,
@@ -73,7 +87,19 @@ export function AgentPanel({ onClose }: { onClose?: () => void }) {
       // Safe cast: the parity test guarantees voiceTools.json names ⊆ VoiceToolName.
       execute: execs[m.name as VoiceToolName],
     }));
-  }, [flyTo, setSelected, setScoreResult, setScoreStatus, setUseCase, scoreResult, useCase, captureMapSnapshot]);
+  }, [
+    flyTo,
+    setSelected,
+    setScoreResult,
+    setScoreStatus,
+    setUseCase,
+    setLayerVisible,
+    setBasemap,
+    layers,
+    scoreResult,
+    useCase,
+    captureMapSnapshot,
+  ]);
 
   const voice = useVoiceMode({ instructions: VOICE_INSTRUCTIONS, tools });
   const showVoice = voice.state !== "idle";
