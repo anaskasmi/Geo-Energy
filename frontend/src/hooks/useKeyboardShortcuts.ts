@@ -97,12 +97,11 @@ export function useKeyboardShortcuts(onToggleHelp: () => void): void {
         case "ArrowUp": {
           const feats = s.scoreResult?.features ?? [];
           if (feats.length === 0) return;
-          // Navigate the ORDER SHOWN (the sorted + filtered list) by reading the rendered rows;
-          // fall back to the scored order if the list isn't mounted.
-          const domIds = Array.from(document.querySelectorAll<HTMLElement>(".results-list [data-parcel]"))
-            .map((el) => el.getAttribute("data-parcel"))
-            .filter((v): v is string => v != null);
-          const order = domIds.length ? domIds : feats.map((f) => String(f.properties.id));
+          // Navigate the ORDER SHOWN (the sorted + filtered list) using the order published by
+          // ResultsPanel — robust even when the list is replaced by the single-parcel detail view.
+          // Fall back to the raw scored order if nothing has been published yet.
+          const shown = s.getResultOrder().map(String);
+          const order = shown.length ? shown : feats.map((f) => String(f.properties.id));
           if (order.length === 0) return;
           event.preventDefault();
           const cur = order.indexOf(String(s.selected?.id));

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { Copy, FileDown } from "lucide-react";
 
 import { apiClient } from "../api/client";
@@ -26,10 +26,8 @@ const EXCLUSION_LABELS: Record<string, string> = {
  * unavailable.
  */
 export function ParcelDetail() {
-  const { selected, setSelected, useCase, captureMapSnapshot } = useMapStore();
+  const { selected, useCase, captureMapSnapshot } = useMapStore();
   const { data, loading, error } = useExplain(selected?.id ?? null, useCase);
-  const placeholderRef = useRef<HTMLParagraphElement | null>(null);
-  const clearedRef = useRef(false);
   const [pdfBusy, setPdfBusy] = useState(false);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
 
@@ -68,21 +66,8 @@ export function ParcelDetail() {
     }
   };
 
-  // After "Clear selection", move focus to the placeholder so keyboard users aren't dropped.
-  useEffect(() => {
-    if (!selected && clearedRef.current) {
-      placeholderRef.current?.focus();
-      clearedRef.current = false;
-    }
-  }, [selected]);
-
-  if (!selected) {
-    return (
-      <p className="placeholder-text" tabIndex={-1} ref={placeholderRef}>
-        Select a parcel — on the map or in the results list — to see its scoring breakdown.
-      </p>
-    );
-  }
+  // Rendered only when a parcel is selected (the panel swaps to this view); guard for type-narrowing.
+  if (!selected) return null;
 
   const maxContribution = data ? Math.max(0.01, ...data.factors.map((f) => f.contribution)) : 1;
 
@@ -189,17 +174,6 @@ export function ParcelDetail() {
           {actionMsg}
         </p>
       )}
-
-      <button
-        type="button"
-        className="parcel-detail__clear"
-        onClick={() => {
-          clearedRef.current = true;
-          setSelected(null);
-        }}
-      >
-        Clear selection
-      </button>
     </div>
   );
 }

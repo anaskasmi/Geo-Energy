@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { LandPlot, ListOrdered, X } from "lucide-react";
+import { ChevronLeft, LandPlot, ListOrdered, X } from "lucide-react";
 
 import type { ScoredFeature } from "../api/client";
 import type { ErrorAction } from "../api/errors";
@@ -44,6 +44,7 @@ export function ResultsPanel() {
     setDrawnPolygon,
     retryScore,
     flyTo,
+    registerResultOrder,
   } = useMapStore();
   const context = useContextSummary();
   const [sortKey, setSortKey] = useState("score");
@@ -52,6 +53,17 @@ export function ResultsPanel() {
   const [bannerOpen, setBannerOpen] = useState(true);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const listRef = useRef<HTMLUListElement | null>(null);
+  const headingRef = useRef<HTMLHeadingElement | null>(null);
+  const detailHeadingRef = useRef<HTMLHeadingElement | null>(null);
+  // Remember which row opened the detail view so we can restore focus when the user goes back.
+  const returnFocusRef = useRef<number | string | null>(null);
+  // Set when a selection is made from a focused row in the list, so we can move focus into the
+  // detail view (the row that had focus is about to unmount). NOT set for map-clicks, arrow-nav, or
+  // URL hydration — so we never grab focus on page load or steal it from the map.
+  const focusDetailRef = useRef(false);
+  // Tracks whether a parcel was selected on the previous render, so one effect can tell entering the
+  // detail view (false→selected) from leaving it (selected→null) and manage focus on each.
+  const wasSelectedRef = useRef(false);
 
   const features = scoreResult?.features ?? [];
 
@@ -74,17 +86,55 @@ export function ResultsPanel() {
   }, [scoreResult, sortKey, filters]);
   const visible = filtered.slice(0, visibleCount);
 
-  // Keep the active row visible when selection comes from the map (bidirectional sync).
+  // Publish the displayed (sorted + filtered) order so keyboard arrow-nav follows it even while the
+  // list is replaced by the detail view (the handler in useKeyboardShortcuts reads it). Kept in a
+  // ref + a stable getter so re-registration isn't needed on every sort/filter change.
+  const filteredRef = useRef(filtered);
+  filteredRef.current = filtered;
   useEffect(() => {
-    if (selected == null || !listRef.current) return;
-    const row = listRef.current.querySelector<HTMLElement>(`[data-parcel="${CSS.escape(String(selected.id))}"]`);
-    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-    row?.scrollIntoView({ block: "nearest", behavior: reduce ? "auto" : "smooth" });
+    registerResultOrder(() => filteredRef.current.map((f) => f.properties.id));
+    return () => registerResultOrder(null);
+  }, [registerResultOrder]);
+
+  // Keep keyboard focus sane as the panel swaps between the list and the detail view.
+  useEffect(() => {
+    const wasSelected = wasSelectedRef.current;
+    wasSelectedRef.current = selected != null;
+
+    if (!wasSelected && selected != null) {
+      // Entering detail from a focused list row (which is about to unmount): move focus to the
+      // detail heading. Gated on focusDetailRef so we never grab focus on map-clicks or load.
+      if (focusDetailRef.current) {
+        focusDetailRef.current = false;
+        detailHeadingRef.current?.focus({ preventScroll: true });
+      }
+    } else if (wasSelected && selected == null) {
+      // Leaving detail (Back or Esc): if focus fell to <body> when the detail unmounted, restore it
+      // to the originating row (Back records it) or the Results heading — never strand the user.
+      const id = returnFocusRef.current;
+      returnFocusRef.current = null;
+      const active = document.activeElement;
+      if (active != null && active !== document.body) return;
+      const row =
+        id != null
+          ? listRef.current?.querySelector<HTMLElement>(`[data-parcel="${CSS.escape(String(id))}"] .results-row__main`)
+          : null;
+      (row ?? headingRef.current)?.focus();
+    }
   }, [selected]);
+
+  // Back out of the detail view to the ranked list (GEO: detail replaces the panel, not stacks).
+  const back = () => {
+    returnFocusRef.current = selected?.id ?? null;
+    setSelected(null);
+  };
 
   const select = (f: ScoredFeature) => {
     const p = f.properties;
     haptic(8); // GEO-29: confirm the tap on touch devices (no-op on desktop)
+    // If the click/Enter came from a focused list row, move focus into the detail view after it
+    // takes over the panel (the row is about to unmount). Harmless for mouse users (no visible ring).
+    focusDetailRef.current = listRef.current?.contains(document.activeElement) ?? false;
     setSelected({ id: p.id, apn: p.apn, acres: p.acres });
     if (p.centroid) flyTo(p.centroid);
   };
@@ -121,24 +171,43 @@ export function ResultsPanel() {
     );
   }, [scoreStatus, scoreError, features, scoreResult]);
 
-  return (
-    <div className="results-panel">
-      {selected && (
-        <section className="panel-section">
-          <h2 className="panel-section__title">
+  // A selected parcel takes over the whole panel — its detail replaces the ranked list, with a back
+  // affordance to return to "all parcels" (rather than stacking detail above it). The polite live
+  // region is rendered in this branch too so re-scoring is still announced while detail is open.
+  if (selected) {
+    return (
+      <div className="results-panel">
+        <p className="visually-hidden" role="status" aria-live="polite">
+          {srSummary}
+        </p>
+        {/* Announce the selected parcel as it changes (e.g. arrow-stepping through results while the
+            detail view is open) so screen-reader users get the same feedback as the list rows. */}
+        <p className="visually-hidden" role="status" aria-live="polite">
+          {`Showing ${selected.apn ?? `parcel ${selected.id}`}.`}
+        </p>
+        <section className="panel-section panel-section--detail">
+          <button type="button" className="panel-back" onClick={back}>
+            <Icon icon={ChevronLeft} size={16} />
+            All parcels
+          </button>
+          <h2 className="panel-section__title" ref={detailHeadingRef} tabIndex={-1}>
             <Icon icon={LandPlot} size={13} />
-            Detail
+            Parcel detail
           </h2>
           <ParcelDetail />
         </section>
-      )}
+      </div>
+    );
+  }
 
+  return (
+    <div className="results-panel">
       <section className="panel-section">
         <p className="visually-hidden" role="status" aria-live="polite">
           {srSummary}
         </p>
         <div className="results-head">
-          <h2 className="panel-section__title">
+          <h2 className="panel-section__title" ref={headingRef} tabIndex={-1}>
             <Icon icon={ListOrdered} size={13} />
             Results
           </h2>
@@ -251,18 +320,12 @@ export function ResultsPanel() {
             <ul className="results-list" role="list" ref={listRef} aria-label="Ranked parcels (highest suitability first)">
               {visible.map((f) => {
                 const p = f.properties;
-                const active = selected?.id === p.id;
                 return (
-                  <li
-                    key={String(p.id)}
-                    data-parcel={String(p.id)}
-                    className={active ? "results-row results-row--active" : "results-row"}
-                  >
+                  <li key={String(p.id)} data-parcel={String(p.id)} className="results-row">
                     <button
                       type="button"
                       className="results-row__main"
                       onClick={() => select(f)}
-                      aria-current={active ? "true" : undefined}
                       aria-label={`Rank ${p.rank}, ${p.apn ?? `parcel ${p.id}`}, suitability ${p.score.toFixed(0)} of 100, ${fmtAcres(p.acres)}`}
                     >
                       <span className="results-row__rank">#{p.rank}</span>

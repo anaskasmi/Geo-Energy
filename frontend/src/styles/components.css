@@ -531,14 +531,34 @@
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
-.parcel-detail__clear {
+/* Back affordance shown above the parcel detail (which takes over the whole panel). */
+.panel-back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
   align-self: flex-start;
-  padding: 6px 12px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  margin: 0 0 var(--space-3) calc(var(--space-2) * -1); /* pull text flush to the panel edge */
+  padding: var(--space-1) var(--space-2);
+  min-height: 28px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-standard), color var(--dur-fast) var(--ease-standard);
+}
+.panel-back:hover {
   background: var(--bg-sunken);
   color: var(--text);
-  font-size: 12px;
+}
+.panel-back svg {
+  flex: 0 0 auto;
+}
+/* The detail view is the sole section in the panel — no trailing divider needed. */
+.panel-section--detail {
+  border-bottom: 0;
 }
 
 /* ── Target sizes (GEO-28, WCAG 2.2 SC 2.5.8: min 24x24 CSS px; mobile bumps to 44 in GEO-29) ── */
@@ -718,12 +738,6 @@
   border-radius: var(--radius-md);
   overflow: hidden;
   transition: border-color var(--dur-fast) var(--ease-standard), box-shadow var(--dur-fast) var(--ease-standard);
-}
-/* Selection = a 3px left accent bar (inset shadow, so it never reflows the row content the way a
- * border-left would). Pairs with the map highlight + the active-row scroll-into-view. */
-.results-row--active {
-  border-color: var(--accent);
-  box-shadow: inset 3px 0 0 0 var(--accent);
 }
 .results-row__main {
   flex: 1 1 auto;
@@ -1089,6 +1103,7 @@ kbd {
   .draw-btn,
   .segmented__btn,
   .results-row__main,
+  .panel-back,
   .map-context-menu button {
     min-height: 44px;
   }

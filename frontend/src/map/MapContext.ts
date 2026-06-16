@@ -79,6 +79,13 @@ export interface MapStore {
   /** Bumped to force a re-score of the current area (the Retry affordance; GEO-32 #11). */
   scoreNonce: number;
   retryScore: () => void;
+  /**
+   * Parcel ids in the order currently shown in the results list (sorted + filtered). Published by
+   * ResultsPanel via the register bridge so keyboard arrow-nav follows the displayed order even
+   * when the list is replaced by the single-parcel detail view. Empty when unavailable.
+   */
+  registerResultOrder: (getOrder: (() => (number | string)[]) | null) => void;
+  getResultOrder: () => (number | string)[];
 
   /** Fly/zoom the map to a [lng, lat] (registered by MapView; respects reduced-motion). */
   registerFlyTo: (fly: ((lngLat: [number, number], zoom?: number) => void) | null) => void;

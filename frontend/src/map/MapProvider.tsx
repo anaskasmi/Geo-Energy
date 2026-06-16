@@ -32,6 +32,7 @@ export function MapProvider({ children }: { children: ReactNode }) {
   const [layerError, setLayerError] = useState(false);
   const flyToApi = useRef<((lngLat: [number, number], zoom?: number) => void) | null>(null);
   const snapshotApi = useRef<(() => string | null) | null>(null);
+  const resultOrderApi = useRef<(() => (number | string)[]) | null>(null);
 
   const setLayerVisible = useCallback((id: string, visible: boolean) => {
     setLayers((prev) => ({ ...prev, [id]: { ...prev[id], visible } }));
@@ -59,6 +60,10 @@ export function MapProvider({ children }: { children: ReactNode }) {
     [],
   );
   const retryScore = useCallback(() => setScoreNonce((n) => n + 1), []);
+  const registerResultOrder = useCallback((getOrder: (() => (number | string)[]) | null) => {
+    resultOrderApi.current = getOrder;
+  }, []);
+  const getResultOrder = useCallback(() => resultOrderApi.current?.() ?? [], []);
   const registerFlyTo = useCallback(
     (fly: ((lngLat: [number, number], zoom?: number) => void) | null) => {
       flyToApi.current = fly;
@@ -110,6 +115,8 @@ export function MapProvider({ children }: { children: ReactNode }) {
       setScoreStatus,
       scoreNonce,
       retryScore,
+      registerResultOrder,
+      getResultOrder,
       registerFlyTo,
       flyTo,
       registerMapSnapshot,
@@ -144,6 +151,8 @@ export function MapProvider({ children }: { children: ReactNode }) {
       setScoreStatus,
       scoreNonce,
       retryScore,
+      registerResultOrder,
+      getResultOrder,
       registerFlyTo,
       flyTo,
       registerMapSnapshot,
