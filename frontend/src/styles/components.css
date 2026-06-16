@@ -29,6 +29,20 @@
   background: var(--bg-elevated);
   overflow-y: auto;
   border-left: 1px solid var(--border);
+  /* Be the containing block for absolutely-positioned descendants (e.g. .visually-hidden labels):
+   * without this their containing block is the document, so this pane's overflow can't clip them
+   * and their deep flow positions extend the page height — a blank scroll area below the map. */
+  position: relative;
+}
+
+/* Docked Assistant rail (GEO-40): a self-contained flex column (header / scrolling body / composer)
+ * that fills its grid cell; the body — not the pane — scrolls, so the header + composer stay put. */
+.pane--left {
+  display: flex;
+  min-height: 0;
+  background: var(--bg-elevated);
+  border-right: 1px solid var(--border);
+  position: relative;
 }
 
 /* The map pane is the positioning context for the absolutely-filled .map-view. */
@@ -154,6 +168,39 @@
   /* ring + shadow come from the .overlay-panel class */
 }
 
+/* Detached (dragged) state: a content-width bar positioned via inline left/top — no longer
+ * stretched edge-to-edge, so the two clusters sit adjacent and it can be dropped anywhere. */
+.topbar--floating {
+  right: auto;
+  width: max-content;
+  max-width: calc(100% - 2 * var(--space-2));
+  flex-wrap: nowrap;
+}
+
+/* Drag handle: the ONLY part of the bar that starts a drag (every button stays clickable). */
+.topbar__grip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 18px;
+  height: var(--ctl-h-md);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-faint);
+  cursor: grab;
+  touch-action: none; /* the grip owns the drag gesture on touch (no map pan/scroll) */
+}
+.topbar__grip:hover {
+  background: var(--bg-sunken);
+  color: var(--text-muted);
+}
+.topbar__grip:active {
+  cursor: grabbing;
+}
+
 /* Right cluster of single-purpose control buttons + the popovers they open. */
 .map-controls {
   position: relative;
@@ -185,11 +232,10 @@
   color: var(--accent-text);
 }
 
-/* Minimal popover for one control's concern — drops below the bar, right-aligned, scrolls. */
+/* Minimal popover for one control's concern. Placement (down/up · right/left) is chosen at open
+ * time by MapControls so it stays on-screen wherever the draggable bar sits (GEO-40). */
 .map-panel {
   position: absolute;
-  top: calc(100% + var(--space-2));
-  right: 0;
   z-index: 7;
   width: min(360px, calc(100vw - 2 * var(--gutter)));
   max-height: min(72vh, calc(100dvh - 130px));
@@ -200,6 +246,25 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   /* ring + shadow come from the .overlay-panel class */
+}
+/* Vertical: open below the bar (default) or flip above it when there's no room below. */
+.map-panel--down {
+  top: calc(100% + var(--space-2));
+  bottom: auto;
+}
+.map-panel--up {
+  bottom: calc(100% + var(--space-2));
+  top: auto;
+}
+/* Horizontal: align the panel's right edge to the trigger cluster (grows left) or its left edge
+ * (grows right) — whichever keeps it within the viewport. */
+.map-panel--right {
+  right: 0;
+  left: auto;
+}
+.map-panel--left {
+  left: 0;
+  right: auto;
 }
 .map-panel__head {
   display: flex;
@@ -288,6 +353,9 @@
 .bottom-sheet__content {
   flex: 1 1 auto;
   overflow-y: auto;
+  /* Containing block for abs-positioned descendants (e.g. .visually-hidden labels) so they're
+   * clipped by this scroll area instead of extending the page height. */
+  position: relative;
   -webkit-overflow-scrolling: touch;
   /* P0 (§6): own the vertical pan so the list scrolls; contain it so an over-scroll doesn't
    * bubble to the map/page behind the sheet. */
@@ -388,43 +456,6 @@
 .layer-swatch[data-symbol="line"] {
   height: 4px;
   border-radius: 2px;
-}
-
-/* ── Legend ───────────────────────────────────────────────────────────────────── */
-.legend {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.legend__symbols {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.legend__item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  color: var(--text-muted);
-}
-.legend__ramp {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.legend__ramp-bar {
-  flex: 1 1 auto;
-  height: 10px;
-  border-radius: 5px;
-  border: 1px solid var(--border);
-}
-.legend__ramp-label {
-  font-size: 11px;
-  color: var(--text-faint);
 }
 
 /* ── Drawing tools (left cluster of the full-width top bar) ────────────────────── */
@@ -621,6 +652,11 @@
   font-size: 12px;
   color: var(--text-muted);
   margin-bottom: 8px;
+}
+/* "Load more" pager under the ranked list (GEO-25): full-width, reveals the next page of rows. */
+.results-load-more {
+  width: 100%;
+  margin-top: var(--space-2);
 }
 .results-filters {
   display: flex;
@@ -1080,34 +1116,89 @@ kbd {
 }
 
 /* ── Agent chat (GEO-27) ──────────────────────────────────────────────────────── */
-.agent-chat {
+/* ── Docked Assistant panel (GEO-40): header / scrolling body / chips / composer ──── */
+.agent-panel {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
 }
-.agent-chat__log {
+.agent-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  flex: 0 0 auto;
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border);
+}
+.agent-panel__id {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2_5);
+  min-width: 0;
+}
+.agent-panel__title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.15;
+  color: var(--text);
+}
+.agent-panel__subtitle {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.agent-panel__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: var(--ctl-h-md);
+  height: var(--ctl-h-md);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+}
+.agent-panel__close:hover {
+  background: var(--bg-sunken);
+  color: var(--text);
+}
+.agent-panel__body {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
-  max-height: 260px;
+  gap: var(--space-3);
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
-  padding: var(--space-2);
-  background: var(--bg-sunken);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  overscroll-behavior: contain;
+  padding: var(--space-4);
+}
+.bot-avatar {
+  flex: 0 0 auto;
+  border-radius: 50%;
+  overflow: hidden;
 }
 .chat-msg {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
-  max-width: 92%;
+  align-items: flex-start;
+  gap: var(--space-2);
+  max-width: 100%;
 }
 .chat-msg--user {
-  align-self: flex-end;
-  align-items: flex-end;
+  flex-direction: row-reverse;
 }
-.chat-msg--assistant {
-  align-self: flex-start;
+.chat-msg__col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  max-width: 85%;
+}
+.chat-msg--user .chat-msg__col {
+  align-items: flex-end;
 }
 .chat-msg__text {
   padding: 8px 10px;
@@ -1126,6 +1217,52 @@ kbd {
   color: var(--text);
   border: 1px solid var(--border);
   border-bottom-left-radius: 3px;
+}
+/* Rendered Markdown inside an assistant bubble (GEO-21): compact paragraphs, lists, code, bold. */
+.chat-md > :first-child {
+  margin-top: 0;
+}
+.chat-md > :last-child {
+  margin-bottom: 0;
+}
+.chat-md p {
+  margin: 0 0 6px;
+}
+.chat-md ul,
+.chat-md ol {
+  margin: 4px 0 6px;
+  padding-left: 18px;
+}
+.chat-md li {
+  margin: 2px 0;
+}
+.chat-md strong {
+  font-weight: 650;
+}
+.chat-md code {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: rgba(128, 128, 128, 0.16);
+}
+/* Tool-phase status line (GEO-21): "Scoring parcels…" etc. while the agent works. */
+.chat-msg__phase {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px;
+  font-size: 12px;
+  font-style: italic;
+  color: var(--text-faint);
+}
+.chat-msg__phase::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: chat-blink 1s steps(2, start) infinite;
 }
 .chat-cursor {
   display: inline-block;
@@ -1218,6 +1355,337 @@ kbd {
 }
 .chat-note code {
   font-size: 10px;
+}
+.agent-panel .chat-chips {
+  flex: 0 0 auto;
+  padding: 0 var(--space-4);
+}
+.agent-panel .chat-note {
+  flex: 0 0 auto;
+  padding: 0 var(--space-4) var(--space-3);
+}
+
+/* Animated empty state (GEO-40): the empty-chat Lottie + a friendly intro before the first turn. */
+.agent-empty {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  text-align: center;
+}
+.agent-empty__art {
+  width: 148px;
+  height: 148px;
+}
+.agent-empty__text {
+  max-width: 34ch;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+/* Typing indicator (three bouncing dots) while the assistant's first token is pending. */
+.typing-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: max-content;
+  padding: 10px 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  border-bottom-left-radius: 3px;
+}
+.typing-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-faint);
+  animation: typing-bounce 1.4s ease-in-out infinite;
+}
+.typing-dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.typing-dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+@keyframes typing-bounce {
+  0%, 60%, 100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  30% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
+/* Composer: mic (voice) · auto-growing textarea · send. */
+.agent-composer {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+  flex: 0 0 auto;
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--border);
+}
+.agent-composer__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-height: 120px;
+  resize: none;
+  padding: var(--space-2) var(--space-2_5);
+  border: 1px solid var(--border-interactive);
+  border-radius: var(--radius-sm);
+  background: var(--bg-sunken);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+.agent-composer__input::placeholder {
+  color: var(--text-faint);
+}
+.agent-composer__input:disabled {
+  opacity: 0.6;
+}
+.agent-composer__mic,
+.agent-composer__send {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: var(--ctl-h-lg);
+  height: var(--ctl-h-lg);
+  border: 0;
+  border-radius: var(--radius-sm);
+  transition: background var(--dur-fast) var(--ease-standard), color var(--dur-fast) var(--ease-standard);
+}
+.agent-composer__mic {
+  background: var(--bg-sunken);
+  border: 1px solid var(--border-interactive);
+  color: var(--text-muted);
+}
+.agent-composer__mic:hover {
+  color: var(--accent-text);
+  border-color: var(--accent);
+}
+.agent-composer__send {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+.agent-composer__send:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+.agent-composer__send:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Mobile: the Assistant opens as a full-screen overlay over the map. */
+.agent-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  background: var(--bg-elevated);
+}
+
+/* ── Voice mode (GEO-40): orb + transcript + stop ─────────────────────────────── */
+.voice-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.voice-panel__stage {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  padding: var(--space-6) var(--space-4);
+  text-align: center;
+}
+.voice-panel__state {
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--text);
+}
+.voice-panel__error {
+  max-width: 36ch;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: #e0564e;
+}
+.voice-panel__log {
+  flex: 0 1 auto;
+  max-height: 38%;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1_5);
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--border);
+}
+.voice-line {
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+.voice-line--user {
+  color: var(--text);
+  font-weight: 500;
+}
+.voice-line--assistant {
+  color: var(--text-muted);
+}
+.voice-panel__stop {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1_5);
+  flex: 0 0 auto;
+  margin: var(--space-3) var(--space-4) var(--space-4);
+  padding: var(--space-2) var(--space-4);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: #e0564e;
+  color: #fff;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+.voice-panel__stop:hover {
+  background: #cf463e;
+}
+
+.voice-orb {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+.voice-orb__glow {
+  position: absolute;
+  inset: -8%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 50%, var(--accent), transparent 70%);
+  opacity: 0.35;
+  filter: blur(14px);
+}
+.voice-orb__core {
+  position: relative;
+  width: 78%;
+  height: 78%;
+  border-radius: 50%;
+  background: linear-gradient(140deg, var(--accent-vivid), #6f57ff);
+  box-shadow: 0 12px 32px -8px var(--accent), inset 0 0 18px rgba(255, 255, 255, 0.18);
+  overflow: hidden;
+}
+.voice-orb__highlight {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.55), transparent 55%);
+}
+.voice-orb__shimmer {
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  opacity: 0;
+  background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.4) 50%, transparent 70%);
+}
+.voice-orb--idle .voice-orb__core {
+  animation: orb-breathe 3s ease-in-out infinite;
+}
+.voice-orb--connecting .voice-orb__core {
+  animation: orb-spin 1.4s linear infinite;
+}
+.voice-orb--listening .voice-orb__core {
+  animation: orb-listen 1.5s ease-in-out infinite;
+}
+.voice-orb--thinking .voice-orb__core {
+  animation: orb-breathe 2s ease-in-out infinite;
+}
+.voice-orb--thinking .voice-orb__shimmer {
+  opacity: 1;
+  animation: orb-shimmer 1.5s ease-in-out infinite;
+}
+.voice-orb--speaking .voice-orb__core {
+  animation: orb-speak 0.8s ease-in-out infinite;
+}
+.voice-orb--error .voice-orb__core {
+  background: linear-gradient(140deg, #e0564e, #b23a33);
+  animation: none;
+}
+.voice-orb--error .voice-orb__glow {
+  background: radial-gradient(circle at 50% 50%, #e0564e, transparent 70%);
+}
+@keyframes orb-breathe {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(0.96);
+    opacity: 0.88;
+  }
+}
+@keyframes orb-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes orb-listen {
+  0%, 100% {
+    transform: scale(1);
+  }
+  25% {
+    transform: scale(1.06);
+  }
+  50% {
+    transform: scale(0.98);
+  }
+  75% {
+    transform: scale(1.04);
+  }
+}
+@keyframes orb-speak {
+  0%, 100% {
+    transform: scale(1);
+  }
+  15% {
+    transform: scale(1.08);
+  }
+  30% {
+    transform: scale(0.97);
+  }
+  45% {
+    transform: scale(1.05);
+  }
+  60% {
+    transform: scale(0.99);
+  }
+  80% {
+    transform: scale(1.03);
+  }
+}
+@keyframes orb-shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .voice-orb__core,
+  .voice-orb__shimmer,
+  .typing-dot {
+    animation: none !important;
+  }
 }
 
 /* ── Shared panel button (GEO-31/32 new controls) ─────────────────────────────── */

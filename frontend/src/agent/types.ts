@@ -1,4 +1,4 @@
-import type { GeoJsonGeometry, UseCase } from "../api/client";
+import type { ScoreFeatureCollection } from "../api/client";
 
 export type ChatRole = "user" | "assistant";
 
@@ -18,26 +18,17 @@ export interface ChatMessage {
   refs?: ParcelRef[];
   /** True while the text is still streaming in. */
   streaming?: boolean;
-}
-
-/** Parsed intent from a free-text request (the mock's stand-in for the agent's planning). */
-export interface ParsedRequest {
-  place?: string;
-  label?: string;
-  geometry?: GeoJsonGeometry;
-  useCase?: UseCase;
-  wantsContext: boolean;
+  /** The current tool phase (a `step` event), shown while the agent works; cleared once text/result arrives. */
+  phase?: string;
 }
 
 /**
- * The streamed event contract the LIVE `/api/agent` (GEO-21 — Gemini via Pydantic AI) will emit
- * over SSE. The mock UI drives the real scoring pipeline instead of emitting these, but the chat
- * is shaped so swapping to a live fetch-stream that yields these events is a contained change.
+ * The streamed event contract the LIVE `/api/agent` (GEO-21 — Gemini via Pydantic AI) emits over
+ * SSE. Mirrors the server frames in api/app/agent.py: `step | token | result | error | done`.
  */
 export type AgentStreamEvent =
-  | { type: "text-delta"; delta: string }
-  | { type: "tool-call"; name: string; args: Record<string, unknown> }
-  | { type: "tool-result"; name: string; ok: boolean }
-  | { type: "feature_collection" }
+  | { type: "step"; phase: string; tool: string }
+  | { type: "token"; text: string }
+  | { type: "result"; featureCollection: ScoreFeatureCollection; area?: string }
   | { type: "error"; message: string }
   | { type: "done" };

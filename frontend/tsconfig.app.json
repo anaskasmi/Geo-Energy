@@ -10,6 +10,7 @@
     /* Bundler mode (Vite resolves modules; tsc only type-checks) */
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
     "isolatedModules": true,
     "moduleDetection": "force",
     "noEmit": true,

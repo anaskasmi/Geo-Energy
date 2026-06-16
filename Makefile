@@ -3,9 +3,9 @@
 # Usage: `make help`
 
 COMPOSE ?= docker compose
-# Profiles that gate the one-shot services (ingest, frontend). Needed so `build` and
-# `config` see ALL four services — compose honors profiles for those subcommands too.
-ALL_PROFILES ?= --profile ingest --profile build
+# Profiles that gate the one-shot services (ingest, tiles, frontend). Needed so `build` and
+# `config` see ALL services — compose honors profiles for those subcommands too.
+ALL_PROFILES ?= --profile ingest --profile tiles --profile build
 
 .DEFAULT_GOAL := help
 .PHONY: help build ingest frontend tiles up down restart logs ps config clean test fmt \
@@ -24,8 +24,8 @@ ingest: ## Run the one-shot ingestion job (fetch → clean → reproject → bui
 frontend: ## Build the SPA into the web_dist volume
 	$(COMPOSE) run --rm frontend
 
-tiles: ## Generate parcels.pmtiles from the current release (GEO-14; needs tippecanoe on PATH, honors DATA_DIR)
-	cd ingest && python3 -m pipeline.tiles
+tiles: ## Generate parcels.pmtiles from the current release (GEO-14; tippecanoe bundled in the ingest image)
+	$(COMPOSE) run --rm tiles
 
 up: ## Start api + web (SPA on http://localhost:8080)
 	$(COMPOSE) up -d api web

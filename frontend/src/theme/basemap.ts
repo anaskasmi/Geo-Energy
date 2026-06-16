@@ -40,8 +40,9 @@ const ESRI_IMAGERY =
 const ESRI_STREETS =
   "https://services.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}";
 
-const ESRI_ATTRIB =
-  'Tiles &copy; <a href="https://www.esri.com/">Esri</a> &mdash; Esri, Maxar, Earthstar Geographics, and the GIS community';
+// Attribution intentionally blank for the Esri basemaps (product decision): the on-map
+// "Tiles © Esri — …, Maxar, Earthstar Geographics, and the GIS community" credit is suppressed.
+const ESRI_ATTRIB = "";
 const CARTO_ATTRIB =
   '&copy; <a href="https://carto.com/attributions">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
 const MAPBOX_ATTRIB =

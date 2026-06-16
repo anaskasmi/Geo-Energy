@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { LandPlot, ListOrdered, X } from "lucide-react";
 
-import { placeGeometry } from "../agent/mockAgent";
 import type { ScoredFeature } from "../api/client";
 import type { ErrorAction } from "../api/errors";
 import { scoreColorCss, scoreTextColor } from "../map/layers";
+import { placeGeometry } from "../map/places";
 import { useMapStore } from "../map/useMapStore";
 import { SORTS, dominantReasons, fmtAcres, fmtKv, fmtMeters } from "../results/format";
 import { useContextSummary } from "../results/hooks";
@@ -22,6 +22,8 @@ interface Filters {
 // Max fields default to no cap (Infinity); an empty input means "no cap" rather than 0.
 const NO_FILTERS: Filters = { minAcres: 0, maxSlope: Infinity, maxTxKm: Infinity };
 const MAX_COMPARE = 3;
+/** Ranked-list page size: render this many rows, with a "Load more" button to reveal the next page. */
+const PAGE_SIZE = 20;
 const numOrInfinity = (v: string) => (v === "" ? Infinity : Number(v));
 const displayMax = (n: number) => (Number.isFinite(n) ? String(n) : "");
 
@@ -48,6 +50,7 @@ export function ResultsPanel() {
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
   const [compareIds, setCompareIds] = useState<(number | string)[]>([]);
   const [bannerOpen, setBannerOpen] = useState(true);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const listRef = useRef<HTMLUListElement | null>(null);
 
   const features = scoreResult?.features ?? [];
@@ -64,6 +67,12 @@ export function ResultsPanel() {
       })
       .sort((a, b) => (sort.get(a) - sort.get(b)) * sort.dir);
   }, [features, sortKey, filters]);
+
+  // Reset pagination to the first page on a new score or when the sort/filters change the list.
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [scoreResult, sortKey, filters]);
+  const visible = filtered.slice(0, visibleCount);
 
   // Keep the active row visible when selection comes from the map (bidirectional sync).
   useEffect(() => {
@@ -114,6 +123,16 @@ export function ResultsPanel() {
 
   return (
     <div className="results-panel">
+      {selected && (
+        <section className="panel-section">
+          <h2 className="panel-section__title">
+            <Icon icon={LandPlot} size={13} />
+            Detail
+          </h2>
+          <ParcelDetail />
+        </section>
+      )}
+
       <section className="panel-section">
         <p className="visually-hidden" role="status" aria-live="polite">
           {srSummary}
@@ -184,7 +203,7 @@ export function ResultsPanel() {
         {features.length > 0 && (
           <>
             <div className="results-summary">
-              Showing <strong>{filtered.length}</strong> of {features.length} parcels
+              Showing <strong>{Math.min(visibleCount, filtered.length)}</strong> of {filtered.length} parcels
               {scoreResult ? ` · ${scoreResult.meta.use_case === "data_center" ? "Data center" : "Utility solar"}` : ""}
             </div>
 
@@ -230,7 +249,7 @@ export function ResultsPanel() {
             )}
 
             <ul className="results-list" role="list" ref={listRef} aria-label="Ranked parcels (highest suitability first)">
-              {filtered.map((f) => {
+              {visible.map((f) => {
                 const p = f.properties;
                 const active = selected?.id === p.id;
                 return (
@@ -283,19 +302,19 @@ export function ResultsPanel() {
               })}
               {filtered.length === 0 && <li className="placeholder-text">No parcels match the filters.</li>}
             </ul>
+
+            {filtered.length > visibleCount && (
+              <button
+                type="button"
+                className="panel-btn results-load-more"
+                onClick={() => setVisibleCount((v) => v + PAGE_SIZE)}
+              >
+                Load {Math.min(PAGE_SIZE, filtered.length - visibleCount)} more
+              </button>
+            )}
           </>
         )}
       </section>
-
-      {selected && (
-        <section className="panel-section">
-          <h2 className="panel-section__title">
-            <Icon icon={LandPlot} size={13} />
-            Detail
-          </h2>
-          <ParcelDetail />
-        </section>
-      )}
     </div>
   );
 }

@@ -63,11 +63,16 @@ make ingest                   # run the one-shot ingestion job → data:/current
 make up                       # start api + web (SPA on http://localhost:8080)
 ```
 
-After `make ingest`, generate the parcel vector tiles (needs `tippecanoe` on PATH):
+After `make ingest`, generate the parcel vector tiles (tippecanoe is bundled in the ingest image,
+so nothing extra is needed on the host):
 
 ```bash
 make tiles                    # parcels.geojson → parcels.pmtiles in data:/current (GEO-14)
+                              # (= docker compose run --rm tiles)
 ```
+
+The map degrades gracefully if `parcels.pmtiles` is absent (the base parcel layer just doesn't
+render); scoring, the agent, and the transmission/substation/flood overlays don't depend on it.
 
 See [`Makefile`](Makefile) for all entrypoints (`build`, `ingest`, `frontend`, `tiles`,
 `up`, `down`, `logs`, `config`, `ps`, plus the deploy helpers below).

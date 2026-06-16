@@ -1,15 +1,17 @@
 # Site-Selection App — docker compose skeleton (GEO-1)
 #
-# Four services share one read-only data artifact via the named volume `data:`.
+# Five services share one read-only data artifact via the named volume `data:`.
 #   - ingest   : one-shot offline pipeline (Service A). Writes data: (rw).
+#   - tiles    : one-shot tippecanoe step — parcels.geojson → parcels.pmtiles. Writes data: (rw).
 #   - api      : FastAPI scoring engine + agent. Reads data: (ro).
 #   - web      : nginx — serves the SPA, proxies /api, serves *.pmtiles. Reads data: (ro).
 #   - frontend : build-only. Compiles the SPA into web_dist:.
 #
-# `ingest` and `frontend` use compose profiles so they do NOT start on `up`; run them
+# `ingest`, `tiles`, and `frontend` use compose profiles so they do NOT start on `up`; run them
 # explicitly as one-shot jobs (FR-A5: ingest never runs on the request path). Build the data
-# artifact + SPA first, then bring the long-running services up:
-#   docker compose run --rm ingest      # build /data/current/site.duckdb + parcels.pmtiles
+# artifact + tiles + SPA first, then bring the long-running services up:
+#   docker compose run --rm ingest      # build /data/current/site.duckdb (+ enriched parcels)
+#   docker compose run --rm tiles       # build /data/current/parcels.pmtiles (GEO-14)
 #   docker compose run --rm frontend    # compile the SPA into web_dist:
 #   docker compose up -d api web         # api waits for the artifact; web waits for api healthy
 #
@@ -41,6 +43,24 @@ services:
     volumes:
       - data:/data                # read-write: writes the artifact into /data/current
 
+  tiles:
+    build:
+      context: ./ingest           # reuse the ingest image — it now bundles the tippecanoe binary
+    image: geo-energy/ingest
+    profiles: ["tiles"]           # one-shot only — `docker compose run --rm tiles` (after ingest)
+    env_file:
+      - path: .env                # optional: LOG_LEVEL / GEO_TIPPECANOE_BIN overrides if present
+        required: false
+    environment:
+      DATA_DIR: /data
+    # Override the image ENTRYPOINT (`python -m pipeline`): run ONLY the GEO-14 tiling step, which
+    # reads /data/current/parcels.geojson and writes /data/current/parcels.pmtiles (config-driven
+    # zoom/attrs from pipeline/config.py). Independent of the DuckDB build — safe to run any time
+    # after `ingest`. Runs as the image's non-root user (uid 10001, owns /data).
+    entrypoint: ["python", "-m", "pipeline.tiles"]
+    volumes:
+      - data:/data                # read-write: writes parcels.pmtiles into /data/current
+
   api:
     build:
       context: ./api
@@ -70,6 +90,12 @@ services:
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       AGENT_MODEL: ${AGENT_MODEL:-google:gemini-3.5-flash}
+      # GEO-40 voice mode (OpenAI Realtime). OPENAI_API_KEY mints short-lived browser session
+      # secrets server-side (SECRET; blank default → voice mode shows a disabled state). Model/voice
+      # are tunable without code changes.
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_REALTIME_MODEL: ${OPENAI_REALTIME_MODEL:-gpt-realtime}
+      OPENAI_REALTIME_VOICE: ${OPENAI_REALTIME_VOICE:-marin}
       AGENT_TIMEOUT_S: ${AGENT_TIMEOUT_S:-60}
       AGENT_MAX_MESSAGE_CHARS: ${AGENT_MAX_MESSAGE_CHARS:-4000}
       AGENT_MAX_CONCURRENCY: ${AGENT_MAX_CONCURRENCY:-4}

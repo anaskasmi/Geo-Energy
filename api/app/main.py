@@ -30,7 +30,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app import agent as agent_mod
-from app import db, perf, scoring, serialize
+from app import db, perf, realtime as realtime_mod, scoring, serialize
 from app.models import ScoreRequest, UseCase
 
 logging.basicConfig(
@@ -341,6 +341,19 @@ async def agent_endpoint(req: agent_mod.AgentRequest, request: Request) -> Strea
     return StreamingResponse(
         generator, media_type="text/event-stream", headers=agent_mod.SSE_HEADERS,
     )
+
+
+@app.post("/api/realtime/session")
+async def realtime_session() -> dict:
+    """Mint a short-lived OpenAI Realtime client secret for the SPA's voice mode (GEO-40).
+
+    The browser uses the returned ephemeral ``value`` to open a WebRTC realtime session DIRECTLY
+    with OpenAI — no audio passes through this server. The real ``OPENAI_API_KEY`` never leaves the
+    process and is never logged. Voice mode is optional: with no key configured this returns
+    ``{"configured": false}`` (200) so the SPA renders a tidy disabled state rather than erroring.
+    The blocking outbound HTTPS call runs in the threadpool so it can't stall the event loop.
+    """
+    return await run_in_threadpool(realtime_mod.mint_client_secret)
 
 
 @app.get("/")
