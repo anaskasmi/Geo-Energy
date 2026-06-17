@@ -111,7 +111,7 @@ All inputs are authoritative public datasets. Live fetches can be replaced by pr
 | Interconnection queue (7) | CAISO (via `gridstatus`) | `CAISO().get_interconnection_queue()` | CSV | yes (US) |
 | Flood SFHA (8) | FEMA NFHL | `hazards.fema.gov/arcgis/.../NFHL/MapServer/28` | ArcGIS REST GeoJSON | yes (US) |
 | Slope (9) | USGS 3DEP | `seamless-3dep.get_dem(...)` (10/30/60 m) | GeoTIFF | yes (US) |
-| Solar GHI (10) | NREL Solar Resource API | `developer.nrel.gov/api/solar/solar_resource/v1.json` | JSON/CSV | yes (US) |
+| Solar GHI (10) | NREL Solar Resource API | `developer.nlr.gov/api/solar/solar_resource/v1.json` | JSON/CSV | yes (US) |
 | EIA-860 generators (11, optional) | U.S. EIA | pre-staged CSV | CSV | yes (US) |
 | Exclusion overlays (11, optional) | PAD-US / NHD / NLCD | pre-staged GeoJSON | GeoJSON | yes (US) |
 | Affordability — price trend | FHFA HPI via **FRED** | series `ATNHPIUS06029A` | JSON API | **no** (global) |
@@ -120,6 +120,8 @@ All inputs are authoritative public datasets. Live fetches can be replaced by pr
 > The U.S.-government layers (Census, HIFLD, FEMA, 3DEP, NREL, EIA) reject non-U.S. IPs at the WAF.
 > FRED and Census ACS — the only two services called on the *request* path (affordability) — are
 > globally reachable and free.
+>
+> **Note:** NREL's API moved from the retired `developer.nrel.gov` to `developer.nlr.gov` (National Laboratory of the Rockies) on 2026-05-29; existing API keys still work, only the host changed.
 
 ---
 
