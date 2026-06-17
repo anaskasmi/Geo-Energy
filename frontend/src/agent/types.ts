@@ -1,4 +1,5 @@
 import type { ScoreFeatureCollection } from "../api/client";
+import type { ZoomDirection } from "../map/zoom";
 import type { BasemapId } from "../theme/basemap";
 
 export type ChatRole = "user" | "assistant";
@@ -66,6 +67,13 @@ export interface MapViewRequest {
   basemap: BasemapId | null;
 }
 
+/** The agent asked the UI to zoom in/out by a percentage of the current view (zoom_map tool). */
+export interface ZoomMapRequest {
+  direction: ZoomDirection;
+  /** How much to zoom, as a percent of the current scale. */
+  percent: number;
+}
+
 export type AgentStreamEvent =
   | { type: "step"; phase: string; tool: string }
   | { type: "token"; text: string }
@@ -77,6 +85,7 @@ export type AgentStreamEvent =
       focus?: FocusParcel;
       exportPdf?: ExportPdfRequest;
       mapView?: MapViewRequest;
+      zoomMap?: ZoomMapRequest;
     }
   | { type: "error"; message: string }
   | { type: "done" };

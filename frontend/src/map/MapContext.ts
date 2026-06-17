@@ -4,6 +4,7 @@ import type { GeoJsonGeometry, ScoreFeatureCollection, UseCase } from "../api/cl
 import type { ErrorAction } from "../api/errors";
 import type { BasemapId } from "../theme/basemap";
 import type { LayerStateMap } from "./layers";
+import type { ZoomDirection } from "./zoom";
 
 /** Quick attributes shown for a hovered/selected parcel (from the vector tile feature). */
 export interface ParcelInfo {
@@ -90,6 +91,11 @@ export interface MapStore {
   /** Fly/zoom the map to a [lng, lat] (registered by MapView; respects reduced-motion). */
   registerFlyTo: (fly: ((lngLat: [number, number], zoom?: number) => void) | null) => void;
   flyTo: (lngLat: [number, number], zoom?: number) => void;
+
+  /** Apply a relative zoom-LEVEL delta to the live map (registered by MapView). */
+  registerZoomBy: (zoom: ((deltaLevels: number) => void) | null) => void;
+  /** Zoom the map in/out by a percentage of the current scale (agent zoom_map tool). */
+  zoomByPercent: (direction: ZoomDirection, percent: number) => void;
 
   /** Capture a PNG data URL of the current map canvas for the PDF one-pager (GEO-31 #5). */
   registerMapSnapshot: (snapshot: (() => string | null) | null) => void;

@@ -120,6 +120,11 @@ export function useAgentChat() {
             req.show.forEach((id) => store.setLayerVisible(id, true));
             if (req.basemap) store.setBasemap(req.basemap);
           },
+          onZoomMap: (req) => {
+            if (!mountedRef.current) return;
+            // Zoom the live map in/out by a percentage of the current view (relative to where it is).
+            store.zoomByPercent(req.direction, req.percent);
+          },
           onExportPdf: (req) => {
             if (!mountedRef.current) return;
             void generateParcelsReport({

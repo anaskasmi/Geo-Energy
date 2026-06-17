@@ -54,7 +54,7 @@ from pydantic_ai.messages import (
 )
 
 from app import agent_tools as at
-from app.agent_tools import BasemapMode
+from app.agent_tools import BasemapMode, ZoomDirection
 from app.models import UseCase
 
 log = logging.getLogger("api.agent")
@@ -190,9 +190,26 @@ _INSTRUCTIONS = (
     "To zoom the map to a specific parcel, call focus_parcel with its id. To produce a downloadable "
     "PDF report of one or more parcels, call export_pdf with a comma-separated list of parcel ids "
     "(or empty for all parcels currently shown). "
-    "To change what is shown on the map, call set_map_view: pass 'show'/'hide' with layer names "
-    "(parcels, transmission, substations, flood, suitability score) to toggle layers, and/or "
-    "'basemap' (auto, light, dark, streets, satellite) to switch the map mode. "
+    "To change what is shown on the map, call set_map_view: pass 'show'/'hide' with layer names to "
+    "toggle layers, and/or 'basemap' (auto, light, dark, streets, satellite) to switch the map mode. "
+    "MAP LAYERS — each layer's on-map COLOR and the name to pass to set_map_view: "
+    "parcels = translucent BLUE/indigo polygons (land parcels); "
+    "transmission = ORANGE lines (the power grid / transmission lines); "
+    "substations = PINK/magenta dots (grid connection points); "
+    "flood = CYAN/teal translucent areas (FEMA flood / SFHA zones); "
+    "suitability score = the GREEN layer — a purple-to-green-to-yellow heat ramp over the scored "
+    "parcels (dark purple = low score, bright green/yellow = high score). "
+    "Users often name a layer by its color, so translate before calling the tool: 'the green layer' "
+    "= suitability score; 'the orange line(s)' = transmission; 'the grid' = transmission (its "
+    "substations are the pink dots); 'the blue parcels' = parcels; 'the flood/cyan layer' = flood. "
+    "To FOCUS on one layer (e.g. 'show only the grid', 'just transmission', 'hide everything else'), "
+    "call set_map_view with that layer in 'show' AND hide='all' — showing a layer overrides hiding "
+    "it, so this disables every other layer and re-enables only that one. After toggling layers, "
+    "point the user to what changed by its on-map color, e.g. 'Check the orange line on the map — "
+    "that's where the transmission line is.' "
+    "To zoom the map closer or wider relative to the current view, call zoom_map with direction "
+    "'in' or 'out' and a percent YOU choose (~10-20% for 'a bit'/'a little', ~30-50% for 'a lot'); "
+    "call it again each time the user says 'more'. "
     "DATA PROVENANCE — if the user asks where the data comes from: parcels and zoning come from "
     "Kern County GEODAT (the county assessor's open data); terrain slope from USGS 3DEP; the solar "
     "resource (GHI) from NREL; transmission lines and substations from HIFLD; flood (SFHA) zones "
@@ -351,6 +368,22 @@ def _register_tools(agent: Agent) -> None:
         """
         try:
             return at.set_map_view(show=show, hide=hide, basemap=basemap)
+        except at.ToolError as exc:
+            return {"error": str(exc)}
+
+    @agent.tool
+    def zoom_map(
+        ctx: RunContext[Deps],
+        direction: ZoomDirection,
+        percent: float = at.ZOOM_PCT_DEFAULT,
+    ) -> dict:
+        """Zoom the map in/out by a percentage of the current view; the UI applies it.
+
+        direction 'in' = closer (magnify), 'out' = wider. Pick percent yourself (~10-20 for
+        'a bit', ~30-50 for 'a lot'); call again when the user says 'more'. No engine call.
+        """
+        try:
+            return at.zoom_map(direction=direction, percent=percent)
         except at.ToolError as exc:
             return {"error": str(exc)}
 

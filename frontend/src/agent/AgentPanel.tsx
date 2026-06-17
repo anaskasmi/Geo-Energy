@@ -31,7 +31,7 @@ Voice rules:
 - Reference the screen naturally, e.g. "I've put the top sites on the map."
 - No markdown, bullet points, or special characters — your words are spoken aloud.
 
-When the user asks to find, score, or rank sites, call find_sites with the place and use_case. When they only want to look at an area, call focus_map. For land affordability or cost, call check_affordability. To explain why a specific parcel scored as it did, call explain_parcel with its id (from a prior find_sites result). For grid or interconnection-queue background, call grid_context. To zoom to a specific parcel, call focus_parcel with its id. To create a downloadable PDF of one or more parcels, call export_pdf (comma-separated ids, or empty for all parcels currently shown). To show or hide map layers (parcels, transmission, substations, flood, suitability score) or switch the basemap (satellite, streets, light, dark, auto), call set_map_view.
+When the user asks to find, score, or rank sites, call find_sites with the place and use_case. When they only want to look at an area, call focus_map. For land affordability or cost, call check_affordability. To explain why a specific parcel scored as it did, call explain_parcel with its id (from a prior find_sites result). For grid or interconnection-queue background, call grid_context. To zoom to a specific parcel, call focus_parcel with its id. To create a downloadable PDF of one or more parcels, call export_pdf (comma-separated ids, or empty for all parcels currently shown). To show or hide map layers or switch the basemap, call set_map_view. The layers and their on-map colors are: parcels are blue polygons, transmission lines are orange, substations are pink dots, flood zones are cyan, and the suitability score is the green heat layer over the scored parcels. Users often name a layer by its color, so the green layer means the suitability score, the orange lines mean transmission, the grid means transmission, and its pink dots are the substations. To focus on one layer, like "show only the grid", call set_map_view with that layer in show and hide set to all — showing wins over hiding, so everything else turns off and only that layer stays on. After toggling, tell them where to look by color, for example: please check the orange line on the map, that's where the transmission line is located. To zoom the map closer or wider, call zoom_map with direction in or out and a percent you choose — about 10 to 20 for "a bit", 30 to 50 for "a lot"; call it again each time they say "more".
 If asked where the data comes from: parcels and zoning are from Kern County GEODAT, terrain slope from USGS 3DEP, solar resource from NREL, transmission and substations from HIFLD, flood zones from FEMA, the interconnection queue from CAISO, and land affordability from the FHFA price index via FRED plus US Census home values.
 Places you cover: ${PLACE_LABELS.join(", ")}. If they name somewhere else, say you only cover Kern County for now.`;
 
@@ -52,6 +52,7 @@ export function AgentPanel({ onClose }: { onClose?: () => void }) {
     setUseCase,
     setLayerVisible,
     setBasemap,
+    zoomByPercent,
     layers,
     scoreResult,
     useCase,
@@ -75,6 +76,7 @@ export function AgentPanel({ onClose }: { onClose?: () => void }) {
       setUseCase,
       setLayerVisible,
       setBasemap,
+      zoomByPercent,
       layers,
       scoreResult,
       useCase,
@@ -95,6 +97,7 @@ export function AgentPanel({ onClose }: { onClose?: () => void }) {
     setUseCase,
     setLayerVisible,
     setBasemap,
+    zoomByPercent,
     layers,
     scoreResult,
     useCase,

@@ -205,6 +205,34 @@ def test_agent_set_map_view_relayed(client):
     assert [e["event"] for e in events][-1] == "done"
 
 
+def test_agent_zoom_map_relayed(client):
+    """A zoom_map tool call is captured and emitted as a `result.zoomMap` relay payload."""
+    calls = {"n": 0}
+
+    async def stream_fn(messages: list, info: AgentInfo):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            yield {0: DeltaToolCall(
+                name="zoom_map",
+                json_args=json.dumps({"direction": "out", "percent": 15}),
+            )}
+        else:
+            for chunk in ("Zoomed ", "out a bit."):
+                yield chunk
+
+    with agent_mod.get_agent().override(model=FunctionModel(stream_function=stream_fn)):
+        resp = client.post("/api/agent", json={"message": "zoom out a bit"})
+    assert resp.status_code == 200, resp.text
+
+    events = parse_sse(resp.text)
+    step = next(e for e in events if e["event"] == "step" and e["data"]["tool"] == "zoom_map")
+    assert step["data"]["phase"] == "zooming"
+
+    result = next(e for e in events if e["event"] == "result")["data"]
+    assert result["zoomMap"] == {"type": "ZoomMap", "direction": "out", "percent": 15.0}
+    assert [e["event"] for e in events][-1] == "done"
+
+
 # --- 2b) Affordability flow: resolve -> check_affordability -> score_parcels(affordability) ---
 def test_agent_affordability_flow(client):
     """Force the affordability turn and assert the SSE protocol + blended result.

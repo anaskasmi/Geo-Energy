@@ -6,6 +6,7 @@ import type {
   ExportPdfRequest,
   FocusParcel,
   MapViewRequest,
+  ZoomMapRequest,
 } from "./types";
 
 /**
@@ -34,6 +35,7 @@ export const PHASE_LABELS: Record<string, string> = {
   focusing_parcel: "Zooming to parcel…",
   exporting_pdf: "Preparing PDF…",
   updating_map: "Updating the map…",
+  zooming: "Zooming the map…",
 };
 
 export interface AgentHandlers {
@@ -44,6 +46,7 @@ export interface AgentHandlers {
   onFocus?: (focus: FocusParcel) => void;
   onExportPdf?: (request: ExportPdfRequest) => void;
   onMapView?: (request: MapViewRequest) => void;
+  onZoomMap?: (request: ZoomMapRequest) => void;
   onError?: (message: string) => void;
   onDone?: () => void;
 }
@@ -84,6 +87,7 @@ function parseFrame(frame: string): AgentStreamEvent | null {
         focus: (data.focus as FocusParcel | undefined) ?? undefined,
         exportPdf: (data.exportPdf as ExportPdfRequest | undefined) ?? undefined,
         mapView: (data.mapView as MapViewRequest | undefined) ?? undefined,
+        zoomMap: (data.zoomMap as ZoomMapRequest | undefined) ?? undefined,
       };
     case "error":
       return { type: "error", message: String(data.message ?? "the assistant hit an error") };
@@ -163,6 +167,7 @@ export async function streamAgent(
             if (ev.focus) handlers.onFocus?.(ev.focus);
             if (ev.exportPdf) handlers.onExportPdf?.(ev.exportPdf);
             if (ev.mapView) handlers.onMapView?.(ev.mapView);
+            if (ev.zoomMap) handlers.onZoomMap?.(ev.zoomMap);
             break;
           case "error":
             handlers.onError?.(ev.message);

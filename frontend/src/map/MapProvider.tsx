@@ -8,6 +8,8 @@ import { MapContext } from "./MapContext";
 import type { DrawApi, DrawMode, MapStore, ParcelInfo, ScoreStatus } from "./MapContext";
 import { initialLayerState } from "./layers";
 import type { LayerStateMap } from "./layers";
+import { zoomLevelDelta } from "./zoom";
+import type { ZoomDirection } from "./zoom";
 
 /** Provides shared map state (basemap, layer toggles, selection, drawing) to the SPA. */
 export function MapProvider({ children }: { children: ReactNode }) {
@@ -31,6 +33,7 @@ export function MapProvider({ children }: { children: ReactNode }) {
   const [scoreNonce, setScoreNonce] = useState(0);
   const [layerError, setLayerError] = useState(false);
   const flyToApi = useRef<((lngLat: [number, number], zoom?: number) => void) | null>(null);
+  const zoomByApi = useRef<((deltaLevels: number) => void) | null>(null);
   const snapshotApi = useRef<(() => string | null) | null>(null);
   const resultOrderApi = useRef<(() => (number | string)[]) | null>(null);
 
@@ -72,6 +75,12 @@ export function MapProvider({ children }: { children: ReactNode }) {
   );
   const flyTo = useCallback((lngLat: [number, number], zoom?: number) => {
     flyToApi.current?.(lngLat, zoom);
+  }, []);
+  const registerZoomBy = useCallback((zoom: ((deltaLevels: number) => void) | null) => {
+    zoomByApi.current = zoom;
+  }, []);
+  const zoomByPercent = useCallback((direction: ZoomDirection, percent: number) => {
+    zoomByApi.current?.(zoomLevelDelta(direction, percent));
   }, []);
   const registerMapSnapshot = useCallback((snapshot: (() => string | null) | null) => {
     snapshotApi.current = snapshot;
@@ -119,6 +128,8 @@ export function MapProvider({ children }: { children: ReactNode }) {
       getResultOrder,
       registerFlyTo,
       flyTo,
+      registerZoomBy,
+      zoomByPercent,
       registerMapSnapshot,
       captureMapSnapshot,
       layerError,
@@ -155,6 +166,8 @@ export function MapProvider({ children }: { children: ReactNode }) {
       getResultOrder,
       registerFlyTo,
       flyTo,
+      registerZoomBy,
+      zoomByPercent,
       registerMapSnapshot,
       captureMapSnapshot,
       layerError,

@@ -315,9 +315,18 @@ def test_set_map_view_unknown_basemap_raises():
         at.set_map_view(basemap="hologram")
 
 
-def test_set_map_view_show_hide_conflict_raises():
-    with pytest.raises(at.ToolError):
-        at.set_map_view(show="flood", hide="flood")
+def test_set_map_view_show_wins_over_hide():
+    # A layer named in both lists is shown, not hidden (so it drops out of `hide`).
+    out = at.set_map_view(show="flood", hide="flood")
+    assert out["show"] == ["sfha"]
+    assert out["hide"] == []
+
+
+def test_set_map_view_focus_one_layer_hides_the_rest():
+    # "Focus on the grid only" -> show transmission, hide all; show wins so only transmission stays.
+    out = at.set_map_view(show="transmission", hide="all")
+    assert out["show"] == ["transmission"]
+    assert out["hide"] == ["parcels", "substations", "sfha", "result"]
 
 
 def test_set_map_view_noop_raises():
@@ -328,6 +337,39 @@ def test_set_map_view_noop_raises():
 def test_set_map_view_basemap_enum_excludes_real_modes_only_keep():
     # 'keep' is the only non-basemap sentinel; the rest mirror the frontend BasemapId.
     assert at.MAP_BASEMAP_ENUM == ["keep", "auto", "light", "dark", "streets", "satellite"]
+
+
+# --- zoom_map (GEO: client-relayed relative zoom) ---------------------------------------------
+def test_zoom_map_out_with_percent():
+    out = at.zoom_map(direction="out", percent=20)
+    assert out == {"type": "ZoomMap", "direction": "out", "percent": 20.0}
+
+
+def test_zoom_map_in_default_percent():
+    out = at.zoom_map(direction="in")
+    assert out["type"] == "ZoomMap"
+    assert out["direction"] == "in"
+    assert out["percent"] == at.ZOOM_PCT_DEFAULT
+
+
+def test_zoom_map_normalizes_direction_case():
+    assert at.zoom_map(direction="OUT")["direction"] == "out"
+
+
+def test_zoom_map_clamps_percent():
+    assert at.zoom_map(direction="in", percent=10_000)["percent"] == 400.0
+    assert at.zoom_map(direction="in", percent=0.1)["percent"] == 1.0
+
+
+def test_zoom_map_bad_direction_raises():
+    with pytest.raises(at.ToolError):
+        at.zoom_map(direction="sideways")
+
+
+@pytest.mark.parametrize("bad", [0, -5, float("nan"), float("inf")])
+def test_zoom_map_bad_percent_raises(bad):
+    with pytest.raises(at.ToolError):
+        at.zoom_map(direction="out", percent=bad)
 
 
 # --- explain_parcel ---------------------------------------------------------------------------
@@ -364,7 +406,7 @@ def test_tool_specs_present_and_named():
     names = {t["name"] for t in at.TOOL_SPECS}
     assert names == {
         "resolve_area", "score_parcels", "check_affordability", "explain_parcel", "grid_context",
-        "focus_parcel", "export_pdf", "set_map_view",
+        "focus_parcel", "export_pdf", "set_map_view", "zoom_map",
     }
 
 

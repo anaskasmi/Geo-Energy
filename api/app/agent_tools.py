@@ -660,9 +660,10 @@ def set_map_view(*, show: str = "", hide: str = "", basemap: str = "keep") -> di
     """
     show_ids = _normalize_layers(show)
     hide_ids = _normalize_layers(hide)
-    clash = [lid for lid in show_ids if lid in set(hide_ids)]
-    if clash:
-        raise ToolError(f"cannot show and hide the same layer: {', '.join(clash)}")
+    # "Show wins": a layer named in BOTH lists is shown, not hidden. This lets the agent express
+    # "focus on X" as show=X + hide=all — hide everything, then re-enable only X.
+    show_set = set(show_ids)
+    hide_ids = [lid for lid in hide_ids if lid not in show_set]
 
     key = re.sub(r"\s+", " ", (basemap or "").strip().lower()).strip(" .")
     chosen = _BASEMAP_ALIASES.get(key, key)
@@ -676,6 +677,41 @@ def set_map_view(*, show: str = "", hide: str = "", basemap: str = "keep") -> di
             "nothing to change — name one or more layers to show/hide, or a basemap to switch to"
         )
     return {"type": "MapView", "show": show_ids, "hide": hide_ids, "basemap": basemap_out}
+
+
+# --- zoom_map: client-relayed relative zoom -----------------------------------------------------
+# Another relay tool (no engine work). The CURRENT zoom lives in the browser, so the agent only
+# decides a direction + a percentage and the SPA applies it relative to wherever the map is now
+# (percent -> a MapLibre zoom-level delta; see frontend/src/map/zoom.ts). Lets the agent answer
+# "zoom out a bit" / "zoom in more" by choosing the percentage itself.
+ZoomDirection = Literal["in", "out"]
+_ZOOM_DIRECTIONS = set(get_args(ZoomDirection))
+# A single step is clamped to a sane band (mirrors zoom.ts ZOOM_PERCENT_MIN/MAX) so one call can't
+# fling the camera across the whole zoom range; "zoom out more" just repeats the step.
+_ZOOM_PCT_MIN, _ZOOM_PCT_MAX = 1.0, 400.0
+ZOOM_PCT_DEFAULT = 15.0
+
+
+def zoom_map(*, direction: str, percent: float = ZOOM_PCT_DEFAULT) -> dict:
+    """Zoom the map in/out by a percentage of the current view — a client-relayed UI action.
+
+    ``direction`` is 'in' (closer/magnify) or 'out' (wider/see more area); ``percent`` is how much,
+    as a percent of the current scale (clamped to [1, 400]). Returns a
+    ``{"type": "ZoomMap", direction, percent}`` payload the SSE handler forwards to the browser,
+    which applies it relative to the live map zoom. Raises :class:`ToolError` on a bad direction or
+    a non-positive percent.
+    """
+    d = (direction or "").strip().lower()
+    if d not in _ZOOM_DIRECTIONS:
+        raise ToolError("direction must be 'in' or 'out'")
+    try:
+        pct = float(percent)
+    except (TypeError, ValueError) as exc:
+        raise ToolError("percent must be a number") from exc
+    if not math.isfinite(pct) or pct <= 0:
+        raise ToolError("percent must be a positive number")
+    pct = max(_ZOOM_PCT_MIN, min(pct, _ZOOM_PCT_MAX))
+    return {"type": "ZoomMap", "direction": d, "percent": round(pct, 1)}
 
 
 def export_pdf(*, parcel_ids: str = "") -> dict:
@@ -928,6 +964,39 @@ REGISTRY: list[ToolDef] = [
         surfaces=("text", "voice"),
         phase="updating_map",
         result=ResultSpec("mapView", "MapView", None, True),
+        parity="props",
+    ),
+    ToolDef(
+        name="zoom_map",
+        description=(
+            "Zoom the map in or out by a percentage of the CURRENT view (relative to wherever the "
+            "map is now). Use this when the user wants a closer or wider look — e.g. 'zoom out a "
+            "bit', 'zoom in', 'zoom out more'. YOU choose 'percent': ~10-20 for 'a bit'/'a little', "
+            "~30-50 for 'a lot'/'much closer or wider'; when they say 'more', call it again. "
+            "direction 'in' = closer (magnify), 'out' = wider (see more area)."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "direction": {
+                    "type": "string",
+                    "enum": ["in", "out"],
+                    "description": "'in' to zoom closer (magnify), 'out' to zoom wider (see more area).",
+                },
+                "percent": {
+                    "type": "number",
+                    "description": (
+                        "How much to zoom, as a percent of the current scale (e.g. 15 = a bit, "
+                        "40 = a lot). Defaults to 15."
+                    ),
+                },
+            },
+            "required": ["direction"],  # percent is defaulted by the wrapper -> optional
+            "additionalProperties": False,
+        },
+        surfaces=("text", "voice"),
+        phase="zooming",
+        result=ResultSpec("zoomMap", "ZoomMap", None, True),
         parity="props",
     ),
 ]

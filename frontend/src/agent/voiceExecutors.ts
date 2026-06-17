@@ -5,6 +5,8 @@ import type { ParcelInfo, ScoreStatus } from "../map/MapContext";
 import { LAYERS, resolveLayerNames } from "../map/layers";
 import type { LayerStateMap } from "../map/layers";
 import { PLACE_LABELS, resolvePlace } from "../map/places";
+import { ZOOM_PERCENT_DEFAULT } from "../map/zoom";
+import type { ZoomDirection } from "../map/zoom";
 import { resolveBasemapMode } from "../theme/basemap";
 import type { BasemapId } from "../theme/basemap";
 
@@ -26,7 +28,8 @@ export type VoiceToolName =
   | "grid_context"
   | "focus_parcel"
   | "export_pdf"
-  | "set_map_view";
+  | "set_map_view"
+  | "zoom_map";
 
 export type VoiceExecutor = (args: Record<string, unknown>) => Promise<unknown>;
 
@@ -39,6 +42,7 @@ export interface VoiceCtx {
   setUseCase: (useCase: UseCase) => void;
   setLayerVisible: (id: string, visible: boolean) => void;
   setBasemap: (basemap: BasemapId) => void;
+  zoomByPercent: (direction: ZoomDirection, percent: number) => void;
   layers: LayerStateMap;
   scoreResult: ScoreFeatureCollection | null;
   useCase: UseCase;
@@ -54,6 +58,7 @@ export function makeVoiceExecutors(ctx: VoiceCtx): Record<VoiceToolName, VoiceEx
     setUseCase,
     setLayerVisible,
     setBasemap,
+    zoomByPercent,
     layers,
     scoreResult,
     useCase,
@@ -195,30 +200,41 @@ export function makeVoiceExecutors(ctx: VoiceCtx): Record<VoiceToolName, VoiceEx
           error: `I don't have a layer called ${unknownLayers.join(", ")}. Try parcels, transmission, substations, flood, or suitability score.`,
         };
       }
-      const clash = show.ids.filter((id) => hide.ids.includes(id));
-      if (clash.length) return { error: `I can't show and hide the same layer at once: ${clash.join(", ")}.` };
+      // "Show wins": a layer in both lists is shown, not hidden — so "focus on X" = show X + hide all.
+      const hideIds = hide.ids.filter((id) => !show.ids.includes(id));
       const bm = resolveBasemapMode(String(args.basemap ?? "keep"));
       if (bm.unknown) {
         return { error: `I don't know a map mode called "${String(args.basemap)}". Try satellite, streets, light, dark, or auto.` };
       }
-      if (!show.ids.length && !hide.ids.length && bm.id === null) {
+      if (!show.ids.length && !hideIds.length && bm.id === null) {
         return { error: "Tell me which layer to show or hide, or which map mode to switch to." };
       }
-      hide.ids.forEach((id) => setLayerVisible(id, false));
+      hideIds.forEach((id) => setLayerVisible(id, false));
       show.ids.forEach((id) => setLayerVisible(id, true));
       if (bm.id) setBasemap(bm.id);
       // Resulting visible set, computed from current state + this change (setState is async, so we
       // can't read `layers` back immediately).
       const visible = new Set(Object.entries(layers).filter(([, t]) => t.visible).map(([id]) => id));
-      hide.ids.forEach((id) => visible.delete(id));
+      hideIds.forEach((id) => visible.delete(id));
       show.ids.forEach((id) => visible.add(id));
       return {
         ok: true,
         shown: show.ids,
-        hidden: hide.ids,
+        hidden: hideIds,
         basemap: bm.id ?? undefined,
         layers_visible: LAYERS.filter((d) => visible.has(d.id)).map((d) => d.id),
       };
+    },
+
+    zoom_map: async (args) => {
+      // Relative zoom: nudge the live map in/out by a percentage of the current view. The store's
+      // zoomByPercent converts the percent to a zoom-level delta and applies it to the real map.
+      const dir = String(args.direction ?? "").trim().toLowerCase();
+      if (dir !== "in" && dir !== "out") return { error: "Tell me whether to zoom in or out." };
+      const raw = Number(args.percent);
+      const percent = Number.isFinite(raw) && raw > 0 ? raw : ZOOM_PERCENT_DEFAULT;
+      zoomByPercent(dir as ZoomDirection, percent);
+      return { ok: true, direction: dir, percent: Math.round(percent) };
     },
   };
 }

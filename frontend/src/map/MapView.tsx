@@ -89,6 +89,7 @@ export function MapView() {
     setLayerError,
     registerDrawApi,
     registerFlyTo,
+    registerZoomBy,
     registerMapSnapshot,
   } = store;
   const [layerNoticeDismissed, setLayerNoticeDismissed] = useState(false);
@@ -157,6 +158,17 @@ export function MapView() {
         window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
       if (reduce) map.jumpTo(target);
       else map.flyTo({ ...target, duration: 800, essential: true });
+    });
+
+    // Relative zoom for the agent's zoom_map tool (GEO): apply a zoom-level delta to wherever the
+    // map is now, keeping the center. Respects reduced-motion (instant vs. eased) like flyTo above.
+    registerZoomBy((deltaLevels) => {
+      const reduce =
+        typeof window !== "undefined" &&
+        window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+      const target = { zoom: map.getZoom() + deltaLevels };
+      if (reduce) map.jumpTo(target);
+      else map.easeTo({ ...target, duration: 400, essential: true });
     });
 
     // Expose a production-safe map snapshot for the per-parcel PDF (GEO-31 #5). Best-effort:
@@ -320,6 +332,7 @@ export function MapView() {
       drawRef.current = null;
       registerDrawApi(null);
       registerFlyTo(null);
+      registerZoomBy(null);
       registerMapSnapshot(null);
       if (overlayRef.current) {
         map.removeControl(overlayRef.current as unknown as maplibregl.IControl);

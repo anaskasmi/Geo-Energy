@@ -88,5 +88,17 @@
       },
       "required": []
     }
+  },
+  {
+    "name": "zoom_map",
+    "description": "Zoom the map in or out by a percentage of the current view, relative to wherever the map is now. Use it for 'zoom out a bit', 'zoom in', or 'zoom out more'. YOU choose 'percent': about 10-20 for 'a bit', 30-50 for 'a lot'; call again when they say 'more'. direction 'in' = closer, 'out' = wider.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "direction": { "type": "string", "enum": ["in", "out"], "description": "'in' to zoom closer (magnify), 'out' to zoom wider (see more area)." },
+        "percent": { "type": "number", "description": "How much to zoom, as a percent of the current scale (e.g. 15 = a bit, 40 = a lot). Defaults to 15." }
+      },
+      "required": ["direction"]
+    }
   }
 ]
