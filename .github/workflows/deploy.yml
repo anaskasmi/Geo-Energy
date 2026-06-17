@@ -89,14 +89,26 @@ jobs:
           : "${DEPLOY_SSH_KEY:?set DEPLOY_SSH_KEY}"
           : "${DEPLOY_PATH:?set DEPLOY_PATH}"
 
+          # GHCR paths MUST be lowercase (the owner login can be CamelCase, e.g. anaskasmi/Geo-Energy).
+          FRONTEND_IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}/frontend:${IMAGE_TAG}"
+
           install -m 600 /dev/null deploy_key
           printf '%s\n' "$DEPLOY_SSH_KEY" > deploy_key
 
           # The host checkout holds docker-compose.yml + a small override that pins the GHCR
-          # images to ${IMAGE_TAG} (see docs/GEO-38-cicd-cdn.md). Pull the new images and roll
-          # only the long-running services; ingest/frontend are one-shot and run separately.
+          # images to ${IMAGE_TAG} (see docs/GEO-38-cicd-cdn.md). Pull the new images and roll only
+          # the long-running services (api/web). The SPA is NOT baked into the web image — it lives
+          # in the `web_dist` volume that the web nginx serves — so a code change to the frontend is
+          # invisible until we re-run the build-only `frontend` image, which copies the freshly built
+          # dist/ into that volume. We resolve the volume name dynamically (compose prefixes it with
+          # the project name) so this works regardless of which compose file the host uses, then roll
+          # web AFTER so nginx restarts onto the new SPA. ingest/tiles stay separate one-shots (FR-A5).
           ssh -o StrictHostKeyChecking=accept-new -i deploy_key "${DEPLOY_USER}@${DEPLOY_HOST}" \
             "cd '${DEPLOY_PATH}' && export IMAGE_TAG='${IMAGE_TAG}' && \
              docker compose pull api web && \
+             docker pull '${FRONTEND_IMAGE}' && \
+             web_dist_vol=\$(docker volume ls --format '{{.Name}}' | grep -E 'web_dist\$' | head -n1) && \
+             test -n \"\$web_dist_vol\" && \
+             docker run --rm -v \"\$web_dist_vol\":/out '${FRONTEND_IMAGE}' && \
              docker compose up -d api web && \
              docker image prune -f"
