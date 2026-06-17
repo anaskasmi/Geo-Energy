@@ -4,6 +4,8 @@
 > solar and data-center development, paired with a map-first web app and an LLM assistant that drives
 > the analysis in natural language (text **and** voice).
 
+**▶ Demo:** [watch the walkthrough](https://www.youtube.com/watch?v=ffbpKK0BP_I)
+
 > ⚠️ The U.S. government data APIs (Census, FEMA, HIFLD, USGS 3DEP, NREL) geo-block non-U.S. IPs — run the ingest from a U.S. host or connect through a U.S. VPN first.
 
 ---
