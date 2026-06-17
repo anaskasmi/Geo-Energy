@@ -15,6 +15,17 @@ export interface RealtimeSession {
   model?: string;
   voice?: string;
   error?: string;
+  /** Per-IP voice budget (GEO-44): true when the cap is already spent (no secret is minted). */
+  limitReached?: boolean;
+  spentUsd?: number;
+  limitUsd?: number;
+}
+
+/** Server response to a forwarded voice-usage report (GEO-44). */
+export interface RealtimeUsageStatus {
+  spentUsd: number;
+  limitUsd: number;
+  limitReached: boolean;
 }
 
 export const OPENAI_REALTIME_CALLS_URL = "https://api.openai.com/v1/realtime/calls";
@@ -38,5 +49,30 @@ export async function fetchRealtimeSession(signal?: AbortSignal): Promise<Realti
     return (await res.json()) as RealtimeSession;
   } catch {
     return { configured: true, error: "Unexpected response starting voice mode." };
+  }
+}
+
+/**
+ * Forward one voice turn's token `usage` (from a realtime `response.done` event) to the backend,
+ * which prices it and accrues it to this IP's per-mode voice budget (GEO-44). Audio runs
+ * browser↔OpenAI and never touches our server, so this report is how the voice cap is enforced.
+ * Best-effort: returns null on any failure (the session simply keeps going).
+ */
+export async function reportRealtimeUsage(
+  usage: unknown,
+  signal?: AbortSignal,
+): Promise<RealtimeUsageStatus | null> {
+  const base = API_BASE_URL.replace(/\/+$/, "");
+  try {
+    const res = await fetch(`${base}/realtime/usage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ usage }),
+      signal,
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as RealtimeUsageStatus;
+  } catch {
+    return null;
   }
 }

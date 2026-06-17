@@ -99,6 +99,8 @@ services:
       AGENT_TIMEOUT_S: ${AGENT_TIMEOUT_S:-60}
       AGENT_MAX_MESSAGE_CHARS: ${AGENT_MAX_MESSAGE_CHARS:-4000}
       AGENT_MAX_CONCURRENCY: ${AGENT_MAX_CONCURRENCY:-4}
+      # GEO-44: per-IP, per-mode USD spend cap (text + voice tracked separately; 0 disables).
+      AGENT_BUDGET_USD: ${AGENT_BUDGET_USD:-3}
     volumes:
       - data:/data:ro             # read-only artifact (GEO-15 opens DuckDB read_only=True)
     expose:

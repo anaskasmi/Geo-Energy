@@ -28,9 +28,12 @@ export function useAgentChat() {
   const store = useMapStore();
   const [messages, setMessages] = useState<ChatMessage[]>([INTRO]);
   const [busy, setBusy] = useState(false);
+  // Set when the per-IP usage budget is spent (GEO-44); the panel renders it as a banner.
+  const [limitNotice, setLimitNotice] = useState<string | null>(null);
   const idRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
   const mountedRef = useRef(true);
+  const limitedRef = useRef(false); // this turn was refused on budget — skip the empty-reply fallback
 
   const newId = () => `m${(idRef.current += 1)}`;
   const append = useCallback((m: ChatMessage) => setMessages((prev) => [...prev, m]), []);
@@ -79,6 +82,7 @@ export function useAgentChat() {
       abortRef.current?.abort();
       const controller = new AbortController();
       abortRef.current = controller;
+      limitedRef.current = false;
       setBusy(true);
 
       append({ id: newId(), role: "user", text });
@@ -159,12 +163,20 @@ export function useAgentChat() {
               }));
             }
           },
+          onLimit: (message) => {
+            // Budget spent: drop the empty assistant placeholder and surface the banner instead.
+            limitedRef.current = true;
+            if (mountedRef.current) {
+              setMessages((prev) => prev.filter((m) => m.id !== asstId));
+              setLimitNotice(message);
+            }
+          },
         },
         controller.signal,
         areaGeometry,
       );
 
-      if (mountedRef.current) {
+      if (mountedRef.current && !limitedRef.current) {
         patch(asstId, (m) => ({
           streaming: false,
           phase: undefined,
@@ -187,5 +199,5 @@ export function useAgentChat() {
     };
   }, []);
 
-  return { messages, send, busy };
+  return { messages, send, busy, limitNotice, dismissLimit: () => setLimitNotice(null) };
 }

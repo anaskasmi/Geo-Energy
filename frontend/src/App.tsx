@@ -1,10 +1,13 @@
 import { AppShell } from "./components/AppShell";
+import { MobileGate } from "./components/MobileGate";
 import { MapProvider } from "./map/MapProvider";
 
 export default function App() {
   return (
-    <MapProvider>
-      <AppShell />
-    </MapProvider>
+    <MobileGate>
+      <MapProvider>
+        <AppShell />
+      </MapProvider>
+    </MobileGate>
   );
 }

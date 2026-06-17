@@ -13,6 +13,16 @@ from pathlib import Path
 import duckdb
 import pytest
 
+from app import budget
+
+
+@pytest.fixture(autouse=True)
+def _reset_budget():
+    """Isolate the per-IP spend ledger (GEO-44) between tests so caps don't accumulate across cases."""
+    budget.clear()
+    yield
+    budget.clear()
+
 
 def build_artifact(data_dir: Path) -> Path:
     """Create ``<data_dir>/current/site.duckdb`` with spatial + a manifest table."""

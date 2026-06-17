@@ -88,4 +88,5 @@ export type AgentStreamEvent =
       zoomMap?: ZoomMapRequest;
     }
   | { type: "error"; message: string }
+  | { type: "limit"; message: string }
   | { type: "done" };

@@ -48,6 +48,8 @@ export interface AgentHandlers {
   onMapView?: (request: MapViewRequest) => void;
   onZoomMap?: (request: ZoomMapRequest) => void;
   onError?: (message: string) => void;
+  /** The per-IP usage budget is spent — the turn was refused before any model call (GEO-44). */
+  onLimit?: (message: string) => void;
   onDone?: () => void;
 }
 
@@ -91,6 +93,11 @@ function parseFrame(frame: string): AgentStreamEvent | null {
       };
     case "error":
       return { type: "error", message: String(data.message ?? "the assistant hit an error") };
+    case "limit":
+      return {
+        type: "limit",
+        message: String(data.message ?? "Sorry, you've reached the usage limit allowed."),
+      };
     case "done":
       return { type: "done" };
     default:
@@ -171,6 +178,9 @@ export async function streamAgent(
             break;
           case "error":
             handlers.onError?.(ev.message);
+            break;
+          case "limit":
+            handlers.onLimit?.(ev.message);
             break;
           case "done":
             handlers.onDone?.();

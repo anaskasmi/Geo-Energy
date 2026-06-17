@@ -27,11 +27,12 @@ from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
+from pydantic import BaseModel
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app import agent as agent_mod
 from app import agent_tools
-from app import db, landvalue, perf, realtime as realtime_mod, scoring, serialize
+from app import budget, db, landvalue, perf, pricing, realtime as realtime_mod, scoring, serialize
 from app.models import ScoreRequest, UseCase
 
 logging.basicConfig(
@@ -364,7 +365,7 @@ async def agent_endpoint(req: agent_mod.AgentRequest, request: Request) -> Strea
             log.info("agent: ignoring invalid drawn area_geometry: %s", exc)
     generator = agent_mod.stream_agent(
         message=req.message, request=request, con=con, zoning_rules=zoning_rules,
-        selected_area_ref=selected_area_ref,
+        selected_area_ref=selected_area_ref, client_ip=budget.client_ip(request),
     )
     return StreamingResponse(
         generator, media_type="text/event-stream", headers=agent_mod.SSE_HEADERS,
@@ -372,7 +373,7 @@ async def agent_endpoint(req: agent_mod.AgentRequest, request: Request) -> Strea
 
 
 @app.post("/api/realtime/session")
-async def realtime_session() -> dict:
+async def realtime_session(request: Request) -> dict:
     """Mint a short-lived OpenAI Realtime client secret for the SPA's voice mode (GEO-40).
 
     The browser uses the returned ephemeral ``value`` to open a WebRTC realtime session DIRECTLY
@@ -380,8 +381,45 @@ async def realtime_session() -> dict:
     process and is never logged. Voice mode is optional: with no key configured this returns
     ``{"configured": false}`` (200) so the SPA renders a tidy disabled state rather than erroring.
     The blocking outbound HTTPS call runs in the threadpool so it can't stall the event loop.
+
+    Per-IP voice budget (GEO-44): if the caller has already spent its voice cap we REFUSE to mint a
+    new session (``limitReached``), so an exhausted user can't start another billable call. Every
+    response also carries the IP's voice ``spentUsd``/``limitUsd`` so the SPA can self-stop a live
+    session as the reported cost approaches the cap.
     """
-    return await run_in_threadpool(realtime_mod.mint_client_secret)
+    ip = budget.client_ip(request)
+    voice_status = budget.status(ip, "voice")
+    if voice_status["limitReached"]:
+        log.info("realtime: client over voice budget; refusing session")
+        return {"configured": True, "limitReached": True, "error": agent_mod.LIMIT_MESSAGE, **voice_status}
+    session = await run_in_threadpool(realtime_mod.mint_client_secret)
+    session.update(voice_status)  # spentUsd / limitUsd / limitReached(False) for client-side metering
+    return session
+
+
+class RealtimeUsageRequest(BaseModel):
+    """Body for POST /api/realtime/usage — the realtime ``response.usage`` object the browser forwards."""
+
+    model_config = {"extra": "ignore"}
+
+    usage: dict | None = None
+
+
+@app.post("/api/realtime/usage")
+async def realtime_usage(req: RealtimeUsageRequest, request: Request) -> dict:
+    """Accrue a voice turn's cost to the caller's per-IP voice budget (GEO-44).
+
+    Voice audio runs browser↔OpenAI and never touches this server, so the SPA forwards the token
+    ``usage`` from each ``response.done`` realtime event here; we price it (:mod:`app.pricing`) and
+    add it to the IP's voice tally. Returns the updated voice ``status`` so the SPA can stop the live
+    session and show the limit banner the moment the cap is reached. Untrusted input is priced
+    defensively and never raises.
+    """
+    ip = budget.client_ip(request)
+    cost = pricing.realtime_cost_usd(req.usage)
+    new_total = budget.add(ip, "voice", cost)
+    log.info("realtime: voice turn cost $%.4f; IP total $%.4f", cost, new_total)
+    return budget.status(ip, "voice")
 
 
 @app.get("/")

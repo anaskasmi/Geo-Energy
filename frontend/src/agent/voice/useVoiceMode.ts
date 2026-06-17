@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { fetchRealtimeSession, OPENAI_REALTIME_CALLS_URL } from "./realtimeClient";
+import { fetchRealtimeSession, OPENAI_REALTIME_CALLS_URL, reportRealtimeUsage } from "./realtimeClient";
 import type { UseVoiceModeOptions, VoiceState, VoiceTranscript } from "./voiceTypes";
+
+/** Shown when the per-IP voice budget is spent (GEO-44); mirrors the server's text-agent message. */
+const LIMIT_MESSAGE = "Sorry, you've reached the usage limit allowed.";
 
 /**
  * OpenAI Realtime voice mode over WebRTC (GEO-40).
@@ -18,6 +21,8 @@ export function useVoiceMode(options: UseVoiceModeOptions) {
   const [state, setState] = useState<VoiceState>("idle");
   const [transcripts, setTranscripts] = useState<VoiceTranscript[]>([]);
   const [error, setError] = useState<string | null>(null);
+  // Set when the per-IP voice budget is spent (GEO-44); the panel renders it as a banner.
+  const [limitNotice, setLimitNotice] = useState<string | null>(null);
 
   // Latest options without re-subscribing the connection (avoids stale tool closures mid-session).
   const optionsRef = useRef(options);
@@ -99,10 +104,23 @@ export function useVoiceMode(options: UseVoiceModeOptions) {
         case "conversation.item.input_audio_transcription.completed":
           pushUser(String(evt.transcript ?? ""));
           break;
-        case "response.done":
+        case "response.done": {
+          // Report this turn's token usage so the backend accrues it to the per-IP voice budget
+          // (GEO-44). If that tips the IP over the cap, stop the session and show the banner.
+          const usage = (evt.response as { usage?: unknown } | undefined)?.usage;
+          if (usage) {
+            void reportRealtimeUsage(usage).then((status) => {
+              if (status?.limitReached) {
+                setLimitNotice(LIMIT_MESSAGE);
+                teardown();
+                setState("idle");
+              }
+            });
+          }
           // Turn finished — go back to a calm listening state (semantic VAD keeps the mic hot).
           setState("listening");
           break;
+        }
         case "response.function_call_arguments.done": {
           // The model wants to act. Run the matching tool locally, return its result, ask for a reply.
           const name = String(evt.name ?? "");
@@ -138,7 +156,7 @@ export function useVoiceMode(options: UseVoiceModeOptions) {
           break;
       }
     },
-    [appendAssistant, pushUser],
+    [appendAssistant, pushUser, teardown],
   );
 
   const start = useCallback(async () => {
@@ -146,6 +164,7 @@ export function useVoiceMode(options: UseVoiceModeOptions) {
     const gen = (genRef.current += 1); // claim this attempt; teardown() bumps gen to cancel it
     const cancelled = () => gen !== genRef.current; // true once stop()/teardown() superseded us
     setError(null);
+    setLimitNotice(null);
     setTranscripts([]);
     setState("connecting");
 
@@ -154,6 +173,12 @@ export function useVoiceMode(options: UseVoiceModeOptions) {
     if (!session.configured) {
       setError("Voice mode needs an OpenAI API key. Add OPENAI_API_KEY to the server's .env.");
       setState("error");
+      return;
+    }
+    if (session.limitReached) {
+      // Per-IP voice budget already spent — don't mint another billable session (GEO-44).
+      setLimitNotice(session.error ?? LIMIT_MESSAGE);
+      setState("idle");
       return;
     }
     if (session.error || !session.value) {
@@ -267,6 +292,8 @@ export function useVoiceMode(options: UseVoiceModeOptions) {
     state,
     transcripts,
     error,
+    limitNotice,
+    dismissLimit: () => setLimitNotice(null),
     isActive: state !== "idle" && state !== "error",
     start,
     stop,
